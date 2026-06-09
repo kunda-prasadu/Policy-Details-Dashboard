@@ -1,0 +1,323 @@
+// DECISION: Component-scoped styles using :host-context for dark mode adaptation.
+// ALTERNATIVES CONSIDERED: Inline styles, global CSS class overrides.
+// REASON: Angular's component encapsulation keeps these styles from leaking.
+//         :host-context(html.dark-theme) detects the dark mode class set by
+//         ThemeService on document.documentElement and overrides badge colours,
+//         matching the Material 3 token flip that happens at the same time.
+
+// ---------------------------------------------------------------------------
+// 1. Status badge semantic colour tokens
+//    Defined as CSS custom properties so both light and dark values are in
+//    one place and easy to update when design tokens change.
+// ---------------------------------------------------------------------------
+
+:host {
+  // Light mode status badge colours (default)
+  --badge-active-bg:    rgba(46, 125, 50, 0.12);
+  --badge-active-text:  #1b5e20;
+
+  --badge-pending-bg:   rgba(245, 124, 0, 0.12);
+  --badge-pending-text: #e65100;
+
+  --badge-expired-bg:   var(--mat-sys-surface-variant);
+  --badge-expired-text: var(--mat-sys-on-surface-variant);
+
+  --badge-cancelled-bg:   rgba(198, 40, 40, 0.12);
+  --badge-cancelled-text: var(--mat-sys-error);
+
+  // Light mode LOB badge colours
+  --lob-property-bg:  rgba(21, 101, 192, 0.10);
+  --lob-property-text: #0d47a1;
+
+  --lob-casualty-bg:  rgba(106, 27, 154, 0.10);
+  --lob-casualty-text: #4a148c;
+
+  --lob-marine-bg:    rgba(0, 131, 143, 0.10);
+  --lob-marine-text:  #006064;
+
+  --lob-a-h-bg:       rgba(130, 119, 23, 0.10);
+  --lob-a-h-text:     #827717;
+
+  // Flag icon colour
+  --flag-color: #f57f17;
+}
+
+// Dark mode overrides — applied when ThemeService sets html.dark-theme
+:host-context(html.dark-theme) {
+  --badge-active-bg:    rgba(165, 214, 167, 0.18);
+  --badge-active-text:  #a5d6a7;
+
+  --badge-pending-bg:   rgba(255, 183, 77, 0.18);
+  --badge-pending-text: #ffb74d;
+
+  --badge-expired-bg:   var(--mat-sys-surface-variant);
+  --badge-expired-text: var(--mat-sys-on-surface-variant);
+
+  --badge-cancelled-bg:   rgba(239, 154, 154, 0.18);
+  --badge-cancelled-text: #ef9a9a;
+
+  --lob-property-bg:  rgba(144, 202, 249, 0.15);
+  --lob-property-text: #90caf9;
+
+  --lob-casualty-bg:  rgba(206, 147, 216, 0.15);
+  --lob-casualty-text: #ce93d8;
+
+  --lob-marine-bg:    rgba(128, 222, 234, 0.15);
+  --lob-marine-text:  #80deea;
+
+  --lob-a-h-bg:       rgba(230, 238, 156, 0.15);
+  --lob-a-h-text:     #e6ee9c;
+
+  --flag-color: #ffb74d;
+}
+
+// ---------------------------------------------------------------------------
+// 2. Table container — horizontal scroll + height management
+// ---------------------------------------------------------------------------
+
+// WHY OVERFLOW-X AUTO: The policy table has 9 columns. On narrow viewports
+// (tablets, small monitors) the columns would otherwise overflow or truncate.
+// Horizontal scroll is the correct UX for data-dense tables.
+.table-container {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-radius: var(--mat-sys-corner-medium, 8px);
+  border: 1px solid var(--mat-sys-outline-variant);
+}
+
+// ---------------------------------------------------------------------------
+// 3. Table layout
+// ---------------------------------------------------------------------------
+
+.policy-table {
+  width: 100%;
+  min-width: 900px; // Prevent columns from being too narrow before scrolling kicks in
+
+  // WHY FIXED TABLE LAYOUT: Prevents column width reflow on every data update.
+  // Column widths are set once via the CSS below and remain stable as rows
+  // load, preventing the jarring layout shifts that occur with auto layout.
+  table-layout: fixed;
+}
+
+// ---------------------------------------------------------------------------
+// 4. Column widths
+// ---------------------------------------------------------------------------
+
+// Utility: target a column's header and data cells in one rule
+@mixin col-width($def, $width) {
+  .mat-column-#{$def} {
+    width: $width;
+    min-width: $width;
+  }
+}
+
+@include col-width(select, 48px);
+@include col-width(policyNumber, 120px);
+@include col-width(policyHolderName, 200px);
+@include col-width(lineOfBusiness, 148px);
+@include col-width(status, 108px);
+@include col-width(region, 140px);
+@include col-width(premium, 112px);
+@include col-width(flagged, 68px);
+@include col-width(actions, 56px);
+
+// ---------------------------------------------------------------------------
+// 5. Column-specific cell styles
+// ---------------------------------------------------------------------------
+
+.col-select {
+  padding-inline: 8px !important;
+}
+
+.col-holder-name {
+  // Allow name to truncate gracefully on narrow viewports
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Right-align the premium column (numeric data convention)
+.col-premium {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums; // Align decimal points across rows
+  font-family: 'Roboto Mono', 'Courier New', monospace;
+  font-size: 0.85rem;
+}
+
+.col-flagged {
+  text-align: center !important;
+  padding-inline: 4px !important;
+}
+
+.col-actions {
+  padding-inline: 4px !important;
+  text-align: center !important;
+}
+
+// ---------------------------------------------------------------------------
+// 6. Policy number
+// ---------------------------------------------------------------------------
+
+.policy-number {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  color: var(--mat-sys-primary);
+  font-weight: 500;
+}
+
+// ---------------------------------------------------------------------------
+// 7. Status badges
+// ---------------------------------------------------------------------------
+
+%badge-base {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.status-badge {
+  @extend %badge-base;
+
+  &--active {
+    background: var(--badge-active-bg);
+    color: var(--badge-active-text);
+  }
+
+  &--pending {
+    background: var(--badge-pending-bg);
+    color: var(--badge-pending-text);
+  }
+
+  &--expired {
+    background: var(--badge-expired-bg);
+    color: var(--badge-expired-text);
+  }
+
+  &--cancelled {
+    background: var(--badge-cancelled-bg);
+    color: var(--badge-cancelled-text);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 8. Line of business badges
+// ---------------------------------------------------------------------------
+
+.lob-badge {
+  @extend %badge-base;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.78rem;
+
+  &--property {
+    background: var(--lob-property-bg);
+    color: var(--lob-property-text);
+  }
+
+  &--casualty {
+    background: var(--lob-casualty-bg);
+    color: var(--lob-casualty-text);
+  }
+
+  &--marine {
+    background: var(--lob-marine-bg);
+    color: var(--lob-marine-text);
+  }
+
+  &--a-h {
+    background: var(--lob-a-h-bg);
+    color: var(--lob-a-h-text);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 9. Flag icon
+// ---------------------------------------------------------------------------
+
+.flag-header-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: var(--mat-sys-on-surface-variant);
+  vertical-align: middle;
+}
+
+.flag-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: var(--flag-color);
+  vertical-align: middle;
+}
+
+// ---------------------------------------------------------------------------
+// 10. Row states — selected and flagged
+// ---------------------------------------------------------------------------
+
+// WHY SELECTED ROW HIGHLIGHT: Gives users clear visual feedback that a row
+// is part of the current selection set before performing a bulk operation.
+tr.is-selected {
+  background-color: color-mix(
+    in srgb,
+    var(--mat-sys-primary) 8%,
+    transparent
+  ) !important;
+}
+
+// Flagged rows get a subtle left accent border to draw attention without
+// disturbing the row layout. The flag icon provides the primary indicator;
+// this is a secondary, at-a-glance signal for scanning.
+tr.is-flagged td:first-child {
+  border-left: 3px solid var(--flag-color);
+}
+
+// ---------------------------------------------------------------------------
+// 11. Empty state
+// ---------------------------------------------------------------------------
+
+.no-data-cell {
+  padding: 48px 24px !important;
+}
+
+.no-data {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--mat-sys-on-surface-variant);
+
+  mat-icon {
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
+    opacity: 0.5;
+  }
+
+  span {
+    font-size: 0.9rem;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 12. Reduced motion
+// ---------------------------------------------------------------------------
+
+// WHY HERE: The mat-table has sort-arrow animations and row transitions.
+// Respecting prefers-reduced-motion at the component level ensures that
+// even Angular Material's internal animations are suppressed for users
+// who have enabled this OS accessibility setting.
+@media (prefers-reduced-motion: reduce) {
+  :host ::ng-deep .mat-sort-header-arrow {
+    transition: none !important;
+  }
+}

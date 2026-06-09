@@ -1,0 +1,208 @@
+<!--
+  WHY STICKY HEADER ROW: The policy list can be long (up to 250 rows per page-size=100).
+  Sticky header ensures column labels are always visible while scrolling,
+  reducing cognitive load when reading rows far down the table.
+
+  WHY [trackBy]="trackById": Reuses existing row DOM nodes on data updates,
+  preventing full table re-renders when a single row is patched (e.g. after flagging).
+-->
+<div class="table-container" role="region" aria-label="Policy list">
+
+  <mat-table
+    [dataSource]="dataSource"
+    [trackBy]="trackById"
+    matSort
+    [matSortActive]="store.sort().active"
+    [matSortDirection]="store.sort().direction"
+    class="policy-table"
+    aria-label="Insurance policies"
+  >
+
+    <!-- ================================================================ -->
+    <!-- SELECT column — bulk-select checkboxes                           -->
+    <!-- ================================================================ -->
+    <ng-container matColumnDef="select" sticky>
+      <!--
+        WHY [checked] AND [indeterminate] BOUND TO SIGNALS:
+        Both are computed signals derived synchronously from pageIds + the store's
+        selectedPolicyIds signal. OnPush change detection picks up signal reads
+        automatically — no manual markForCheck() required.
+      -->
+      <th mat-header-cell *matHeaderCellDef class="col-select">
+        <mat-checkbox
+          color="primary"
+          [checked]="isAllOnPageSelected()"
+          [indeterminate]="isSomeOnPageSelected()"
+          (change)="toggleSelectAll()"
+          aria-label="Select or deselect all policies on this page"
+        />
+      </th>
+      <td mat-cell *matCellDef="let row" class="col-select">
+        <mat-checkbox
+          color="primary"
+          [checked]="store.selectedPolicyIds().includes(row.id)"
+          (change)="store.toggleSelection(row.id)"
+          [attr.aria-label]="'Select policy ' + row.policyNumber"
+        />
+      </td>
+    </ng-container>
+
+    <!-- ================================================================ -->
+    <!-- POLICY NUMBER column                                              -->
+    <!-- ================================================================ -->
+    <ng-container matColumnDef="policyNumber">
+      <th mat-header-cell *matHeaderCellDef mat-sort-header>Policy #</th>
+      <td mat-cell *matCellDef="let row">
+        <span class="policy-number">{{ row.policyNumber }}</span>
+      </td>
+    </ng-container>
+
+    <!-- ================================================================ -->
+    <!-- POLICYHOLDER NAME column                                          -->
+    <!-- ================================================================ -->
+    <ng-container matColumnDef="policyHolderName">
+      <th mat-header-cell *matHeaderCellDef mat-sort-header>Policyholder</th>
+      <td mat-cell *matCellDef="let row" class="col-holder-name">
+        {{ row.policyHolderName }}
+      </td>
+    </ng-container>
+
+    <!-- ================================================================ -->
+    <!-- LINE OF BUSINESS column                                           -->
+    <!-- ================================================================ -->
+    <ng-container matColumnDef="lineOfBusiness">
+      <th mat-header-cell *matHeaderCellDef mat-sort-header>Line of Business</th>
+      <td mat-cell *matCellDef="let row">
+        <!--
+          WHY CSS CLASS FROM getLobClass(): Avoids a separate LobClassPipe file
+          for a one-line transformation. The method is colocated with the component.
+        -->
+        <span [class]="'lob-badge lob-badge--' + getLobClass(row.lineOfBusiness)">
+          {{ row.lineOfBusiness }}
+        </span>
+      </td>
+    </ng-container>
+
+    <!-- ================================================================ -->
+    <!-- STATUS column                                                     -->
+    <!-- ================================================================ -->
+    <ng-container matColumnDef="status">
+      <th mat-header-cell *matHeaderCellDef mat-sort-header>Status</th>
+      <td mat-cell *matCellDef="let row">
+        <span [class]="'status-badge status-badge--' + row.status.toLowerCase()">
+          {{ row.status }}
+        </span>
+      </td>
+    </ng-container>
+
+    <!-- ================================================================ -->
+    <!-- REGION column                                                     -->
+    <!-- ================================================================ -->
+    <ng-container matColumnDef="region">
+      <th mat-header-cell *matHeaderCellDef mat-sort-header>Region</th>
+      <td mat-cell *matCellDef="let row">{{ row.region }}</td>
+    </ng-container>
+
+    <!-- ================================================================ -->
+    <!-- PREMIUM column                                                    -->
+    <!-- ================================================================ -->
+    <!--
+      WHY mat-sort-header="premiumAmount": The column definition key is 'premium'
+      (display label), but the sort field is 'premiumAmount' (the actual Policy
+      property name sent to the API as _sort=premiumAmount).
+      arrowPosition="before" right-aligns the sort arrow with numeric columns.
+    -->
+    <ng-container matColumnDef="premium">
+      <th mat-header-cell *matHeaderCellDef mat-sort-header="premiumAmount" arrowPosition="before">
+        Premium
+      </th>
+      <td mat-cell *matCellDef="let row" class="col-premium">
+        {{ formatPremium(row.premiumAmount, row.currency) }}
+      </td>
+    </ng-container>
+
+    <!-- ================================================================ -->
+    <!-- FLAGGED column                                                    -->
+    <!-- ================================================================ -->
+    <ng-container matColumnDef="flagged">
+      <th mat-header-cell *matHeaderCellDef class="col-flagged">
+        <mat-icon class="flag-header-icon" aria-hidden="true" matTooltip="Flagged for review">flag</mat-icon>
+        <span class="sr-only">Flagged for review</span>
+      </th>
+      <td mat-cell *matCellDef="let row" class="col-flagged">
+        @if (row.flaggedForReview) {
+          <mat-icon
+            class="flag-icon"
+            aria-label="Flagged for review"
+            matTooltip="This policy is flagged for underwriter review"
+          >flag</mat-icon>
+        }
+      </td>
+    </ng-container>
+
+    <!-- ================================================================ -->
+    <!-- ACTIONS column                                                    -->
+    <!-- ================================================================ -->
+    <ng-container matColumnDef="actions" stickyEnd>
+      <th mat-header-cell *matHeaderCellDef>
+        <span class="sr-only">Actions</span>
+      </th>
+      <td mat-cell *matCellDef="let row" class="col-actions">
+        <!--
+          WHY manage_search ICON: "manage_search" (inspector magnifier) clearly
+          communicates "view details / deep dive" without using a generic "more"
+          icon, distinguishing this action from other row-level buttons that
+          might be added later (e.g. renew, delete).
+        -->
+        <button
+          mat-icon-button
+          (click)="rowClick.emit(row)"
+          [attr.aria-label]="'View details for policy ' + row.policyNumber"
+          matTooltip="View policy details"
+          matTooltipShowDelay="500"
+        >
+          <mat-icon>manage_search</mat-icon>
+        </button>
+      </td>
+    </ng-container>
+
+    <!-- ================================================================ -->
+    <!-- Row definitions                                                   -->
+    <!-- ================================================================ -->
+
+    <!-- WHY sticky: true on header row: keeps column labels visible while
+         scrolling long policy lists — reduces cognitive load. -->
+    <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
+
+    <tr
+      mat-row
+      *matRowDef="let row; columns: displayedColumns;"
+      [class.is-selected]="store.selectedPolicyIds().includes(row.id)"
+      [class.is-flagged]="row.flaggedForReview"
+    ></tr>
+
+    <!-- Empty state row — shown when dataSource has no records -->
+    <tr class="mat-mdc-no-data-row" *matNoDataRow>
+      <td class="no-data-cell" [attr.colspan]="displayedColumns.length">
+        <div class="no-data">
+          <mat-icon aria-hidden="true">search_off</mat-icon>
+          <span>No policies match the current filters.</span>
+        </div>
+      </td>
+    </tr>
+
+  </mat-table>
+
+</div>
+
+<!--
+  WHY showFirstLastButtons: Allows one-click navigation to the last page —
+  useful when an underwriter wants to see the most recently added policies
+  (which are appended at the end of the sorted list).
+-->
+<mat-paginator
+  [pageSizeOptions]="pageSizeOptions"
+  [pageSize]="10"
+  showFirstLastButtons
+  aria-label="Navigate policy pages"
+/>
