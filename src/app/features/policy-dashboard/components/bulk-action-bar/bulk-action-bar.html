@@ -1,0 +1,65 @@
+<!--
+  WHY role="toolbar": The element groups related action buttons that operate on
+  a selection. `toolbar` is the correct ARIA landmark for a set of controls that
+  act on the current context.
+
+  WHY aria-label="Bulk actions for selected policies": Distinguishes this toolbar
+  from any other toolbars in the page (e.g. table column header actions) for
+  users navigating by landmark regions.
+-->
+<div class="bulk-bar" role="toolbar" aria-label="Bulk actions for selected policies">
+
+  <!--
+    WHY aria-live="polite" + aria-atomic="true":
+    - polite: announces the count change after the current speech finishes,
+      not mid-sentence (assertive would interrupt).
+    - atomic: reads the entire region content on each change, not just the
+      changed portion — "3 policies selected" instead of just "3".
+    The visually-styled span is wrapped in the live region so screen readers
+    hear the full contextual message on every selection change.
+  -->
+  <span
+    class="bulk-bar__count"
+    aria-live="polite"
+    aria-atomic="true"
+  >
+    <mat-icon aria-hidden="true" class="bulk-bar__count-icon">check_box</mat-icon>
+    {{ store.selectedCount() }}
+    {{ store.selectedCount() === 1 ? 'policy' : 'policies' }} selected
+  </span>
+
+  <div class="bulk-bar__actions">
+
+    <!-- Clear selection -->
+    <button
+      mat-stroked-button
+      (click)="store.clearSelection()"
+      aria-label="Clear current selection"
+      matTooltip="Clear selection"
+    >
+      <mat-icon>deselect</mat-icon>
+      Clear
+    </button>
+
+    <!-- Flag for review -->
+    <!--
+      WHY mat-flat-button color="warn": The flag action is consequential —
+      it marks policies for manual review and is not easily reversible via the UI.
+      The warn (red/error) accent communicates that this is an impactful action,
+      prompting the user to confirm they have selected the right rows.
+    -->
+    <button
+      mat-flat-button
+      color="warn"
+      (click)="flagForReview()"
+      [disabled]="!store.hasSelection()"
+      aria-label="Flag selected policies for underwriter review"
+      matTooltip="Flag all selected policies for review"
+    >
+      <mat-icon>flag</mat-icon>
+      Flag for Review
+    </button>
+
+  </div>
+
+</div>

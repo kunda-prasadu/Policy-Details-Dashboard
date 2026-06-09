@@ -1,0 +1,307 @@
+// DECISION: Status card colours defined as CSS custom properties on :host,
+// with dark-mode overrides via :host-context(html.dark-theme).
+// REASON: Same pattern as PolicyTable badges — a single location for colour
+//         values, easily updateable, no SCSS variable duplication.
+
+:host {
+  display: block;
+
+  // Status card colour tokens — light mode
+  --card-active-bg:        rgba(46, 125, 50, 0.08);
+  --card-active-border:    rgba(46, 125, 50, 0.25);
+  --card-active-icon:      #2e7d32;
+  --card-active-count:     #1b5e20;
+
+  --card-pending-bg:       rgba(245, 124, 0, 0.08);
+  --card-pending-border:   rgba(245, 124, 0, 0.25);
+  --card-pending-icon:     #f57c00;
+  --card-pending-count:    #e65100;
+
+  --card-expired-bg:       var(--mat-sys-surface-variant);
+  --card-expired-border:   var(--mat-sys-outline-variant);
+  --card-expired-icon:     var(--mat-sys-on-surface-variant);
+  --card-expired-count:    var(--mat-sys-on-surface);
+
+  --card-cancelled-bg:     rgba(198, 40, 40, 0.08);
+  --card-cancelled-border: rgba(198, 40, 40, 0.25);
+  --card-cancelled-icon:   #c62828;
+  --card-cancelled-count:  var(--mat-sys-error);
+
+  // Arc colours
+  --arc-track:    var(--mat-sys-surface-variant);
+  --arc-progress: #f57c00;   // Amber — urgency indicator
+}
+
+:host-context(html.dark-theme) {
+  --card-active-bg:        rgba(165, 214, 167, 0.12);
+  --card-active-border:    rgba(165, 214, 167, 0.30);
+  --card-active-icon:      #a5d6a7;
+  --card-active-count:     #c8e6c9;
+
+  --card-pending-bg:       rgba(255, 183, 77, 0.12);
+  --card-pending-border:   rgba(255, 183, 77, 0.30);
+  --card-pending-icon:     #ffb74d;
+  --card-pending-count:    #ffe082;
+
+  --card-expired-bg:       var(--mat-sys-surface-variant);
+  --card-expired-border:   var(--mat-sys-outline-variant);
+  --card-expired-icon:     var(--mat-sys-on-surface-variant);
+  --card-expired-count:    var(--mat-sys-on-surface);
+
+  --card-cancelled-bg:     rgba(239, 154, 154, 0.12);
+  --card-cancelled-border: rgba(239, 154, 154, 0.30);
+  --card-cancelled-icon:   #ef9a9a;
+  --card-cancelled-count:  #ef9a9a;
+
+  --arc-progress: #ffb74d;
+}
+
+// ---------------------------------------------------------------------------
+// 1. Panel layout
+// ---------------------------------------------------------------------------
+
+.summary-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 16px);
+  padding: var(--space-2, 16px);
+}
+
+// ---------------------------------------------------------------------------
+// 2. Status cards grid
+// ---------------------------------------------------------------------------
+
+.status-cards {
+  display: grid;
+  // Responsive: 1 col on mobile, 2 on tablet, 4 on desktop
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+// Reset button styles and apply card styling
+.status-card {
+  appearance: none;
+  border: 1px solid var(--card-expired-border); // Default — overridden per variant
+  border-radius: var(--mat-sys-corner-medium, 8px);
+  background: var(--card-expired-bg);
+  cursor: pointer;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  width: 100%;
+  transition: box-shadow 150ms ease, transform 100ms ease;
+  position: relative; // for matRipple overflow clip
+  overflow: hidden;
+
+  &:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    transform: translateY(-1px);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 2px;
+  }
+
+  // Per-status colour variants
+  @each $s in active, pending, expired, cancelled {
+    &--#{$s} {
+      background: var(--card-#{$s}-bg);
+      border-color: var(--card-#{$s}-border);
+
+      .status-card__icon-wrap mat-icon {
+        color: var(--card-#{$s}-icon);
+      }
+
+      .status-card__count {
+        color: var(--card-#{$s}-count);
+      }
+    }
+  }
+}
+
+.status-card__icon-wrap {
+  flex: 0 0 auto;
+  mat-icon {
+    font-size: 28px;
+    width: 28px;
+    height: 28px;
+  }
+}
+
+.status-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.status-card__count {
+  font-size: 1.8rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.status-card__label {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--mat-sys-on-surface-variant);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+// ---------------------------------------------------------------------------
+// 3. Widgets row: arc + GWP bars side-by-side
+// ---------------------------------------------------------------------------
+
+.widgets-row {
+  display: grid;
+  // Arc takes ~180px; GWP bars take the rest
+  grid-template-columns: 180px 1fr;
+  gap: 24px;
+  align-items: start;
+
+  // Stack on narrow viewports
+  @media (max-width: 600px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 4. SVG arc widget
+// ---------------------------------------------------------------------------
+
+.arc-widget {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.arc-svg {
+  width: 120px;
+  height: 120px;
+  overflow: visible;
+}
+
+.arc-track {
+  stroke: var(--arc-track);
+}
+
+.arc-progress {
+  stroke: var(--arc-progress);
+  stroke-linecap: round;
+  // WHY 600ms EASE-IN-OUT: Fast enough to feel responsive on filter change,
+  // slow enough for the user to register the value has changed.
+  transition: stroke-dashoffset 600ms ease-in-out;
+}
+
+.arc-text-pct {
+  font-size: 20px;
+  font-weight: 700;
+  fill: var(--mat-sys-on-surface);
+}
+
+.arc-text-label {
+  font-size: 9px;
+  fill: var(--mat-sys-on-surface-variant);
+}
+
+.arc-text-sublabel {
+  font-size: 8px;
+  fill: var(--mat-sys-on-surface-variant);
+}
+
+.arc-caption {
+  font-size: 0.72rem;
+  color: var(--mat-sys-on-surface-variant);
+  text-align: center;
+  margin: 0;
+}
+
+// ---------------------------------------------------------------------------
+// 5. GWP progress bars
+// ---------------------------------------------------------------------------
+
+.gwp-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gwp-bars__title {
+  margin: 0 0 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.gwp-bars__empty {
+  font-size: 0.85rem;
+  color: var(--mat-sys-on-surface-variant);
+  margin: 0;
+}
+
+.gwp-bar-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 70px;
+  align-items: center;
+  gap: 8px;
+}
+
+.gwp-bar-row__lob {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--mat-sys-on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gwp-bar-row__track {
+  height: 8px;
+  background: var(--mat-sys-surface-variant);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.gwp-bar-row__fill {
+  height: 100%;
+  background: var(--mat-sys-primary);
+  border-radius: 4px;
+  // WHY 800ms EASE-OUT: Progress bars animate on filter changes. A slightly
+  // longer duration than the arc (600ms) creates a subtle stagger effect
+  // that draws the eye across both widgets sequentially.
+  transition: width 800ms ease-out;
+}
+
+.gwp-bar-row__value {
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--mat-sys-on-surface-variant);
+  text-align: right;
+  white-space: nowrap;
+}
+
+// ---------------------------------------------------------------------------
+// 6. Reduced motion
+// ---------------------------------------------------------------------------
+
+@media (prefers-reduced-motion: reduce) {
+  .arc-progress {
+    transition: none;
+  }
+  .gwp-bar-row__fill {
+    transition: none;
+  }
+  .status-card {
+    transition: none;
+    &:hover {
+      transform: none;
+    }
+  }
+}

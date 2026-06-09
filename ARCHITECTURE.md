@@ -72,7 +72,10 @@ src/app/
         ├── components/
         │   ├── policy-table/  Paginated, sortable, selectable mat-table
         │   ├── policy-filter/ Search bar + chip strip + URL/storage sync
-        │   └── filter-panel/  Advanced filters bottom sheet (MatBottomSheet)
+        │   ├── filter-panel/  Advanced filters bottom sheet (MatBottomSheet)
+        │   ├── summary-panel/ Status KPI cards + SVG arc + GWP bars
+        │   ├── bulk-action-bar/ Selection toolbar with flag action
+        │   └── policy-drilldown-dialog/ Detail card + filtered list dialog
         └── policy-dashboard.routes.ts  Feature-level route config
 ```
 
@@ -199,6 +202,25 @@ PolicyFilter (search bar + chip strip)
 │                        FilterPanel (bottom sheet)
 │                        ├── seeded from MAT_BOTTOM_SHEET_DATA
 │                        └── dismiss(value | 'reset' | undefined)
+│
+SummaryPanel (KPI cards + widgets)
+├── statusCards: computed() → 4 status cards from store.summary()
+├── arcDashOffset: computed() → stroke-dashoffset for SVG arc
+├── gwpBars: computed() → GWP per LOB, relative % bars
+└── openStatusDrilldown(status) → MatDialog.open(PolicyDrilldownDialog)
+                                           │
+                                 PolicyDrilldownDialog (detail | status | expiring)
+                                 ├── mode='detail'  → detailPolicy = computed from store.policies()
+                                 ├── mode='status'  → listPolicies = computed from store.filteredPolicies()
+                                 ├── mode='expiring'→ listPolicies filtered to ≤30d
+                                 ├── renewingIds = signal<Set<string>>()
+                                 ├── renew(id) → store.renewPolicy(id) + 1500ms spinner
+                                 └── flagDetail() → store.selectAll([id]) + flagSelectedPolicies()
+│
+BulkActionBar (selection toolbar)
+├── aria-live selection count
+├── clearSelection() → store.clearSelection()
+└── flagForReview() → snapshot count → store.flagSelectedPolicies() → MatSnackBar
 │
 PolicyTable (mat-table)
 ├── dataSource: MatTableDataSource<Policy>

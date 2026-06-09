@@ -1,0 +1,135 @@
+<!--
+  WHY ROLE GRID FOR CARDS: The four status cards are logically a 2×2 (or 4×1) grid
+  of interactive tiles. `role="grid"` with `role="gridcell"` children gives screen
+  readers structural context and arrow-key navigation support without requiring
+  a full HTML <table> element, which would semantically imply tabular data.
+-->
+
+<section class="summary-panel" aria-label="Policy portfolio summary">
+
+  <!-- ===================================================================== -->
+  <!-- Row 1: Status cards                                                    -->
+  <!-- ===================================================================== -->
+  <div class="status-cards" role="grid" aria-label="Policy status counts">
+
+    @for (card of statusCards(); track card.status) {
+      <!--
+        WHY BUTTON NOT DIV: Clickable elements must be <button> for keyboard
+        accessibility (Enter/Space activation) and correct role announcement.
+        matRipple provides the Material touch feedback without needing a full
+        MatButton import (which adds button reset styles we don't want here).
+      -->
+      <button
+        class="status-card status-card--{{ card.colorClass }}"
+        role="gridcell"
+        matRipple
+        (click)="openStatusDrilldown(card.status)"
+        [attr.aria-label]="card.ariaLabel"
+        [matTooltip]="'View ' + card.status + ' policies'"
+        matTooltipShowDelay="600"
+      >
+        <div class="status-card__icon-wrap">
+          <mat-icon aria-hidden="true">{{ card.icon }}</mat-icon>
+        </div>
+        <div class="status-card__body">
+          <span class="status-card__count">{{ card.count }}</span>
+          <span class="status-card__label">{{ card.status }}</span>
+        </div>
+      </button>
+    }
+
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- Row 2: SVG arc widget + GWP bars                                       -->
+  <!-- ===================================================================== -->
+  <div class="widgets-row">
+
+    <!-- ------------------------------------------------------------------ -->
+    <!-- SVG arc: % of active policies expiring within 30 days              -->
+    <!-- ------------------------------------------------------------------ -->
+    <div class="arc-widget" aria-label="Policies expiring within 30 days">
+      <svg
+        class="arc-svg"
+        viewBox="0 0 120 120"
+        role="img"
+        [attr.aria-label]="arcPercent() + '% of active policies expire within 30 days'"
+      >
+        <!-- Background ring (always visible) -->
+        <circle
+          class="arc-track"
+          cx="60" cy="60"
+          [attr.r]="ARC_CIRCUMFERENCE / (2 * 3.14159)"
+          fill="none"
+          stroke-width="10"
+        />
+        <!--
+          WHY rotate(-90deg) TRANSFORM: SVG strokes start at the 3-o'clock
+          position (0°). Rotating the circle -90° shifts the start to 12-o'clock,
+          which is the conventional start for progress ring UIs.
+
+          WHY CSS transition on stroke-dashoffset: The arcDashOffset signal
+          changes whenever the filter context changes (e.g. filtering to
+          Singapore reduces expiringWithin30Days). The CSS transition turns that
+          discrete value change into a smooth animation without any JS animation
+          loop or requestAnimationFrame.
+        -->
+        <circle
+          class="arc-progress"
+          cx="60" cy="60"
+          [attr.r]="ARC_CIRCUMFERENCE / (2 * 3.14159)"
+          fill="none"
+          stroke-width="10"
+          [attr.stroke-dasharray]="ARC_CIRCUMFERENCE"
+          [attr.stroke-dashoffset]="arcDashOffset()"
+          transform="rotate(-90 60 60)"
+        />
+        <!-- Centre text -->
+        <text x="60" y="56" class="arc-text-pct" text-anchor="middle" dominant-baseline="middle">
+          {{ arcPercent() }}%
+        </text>
+        <text x="60" y="72" class="arc-text-label" text-anchor="middle">
+          expiring
+        </text>
+        <text x="60" y="84" class="arc-text-sublabel" text-anchor="middle">
+          in 30 days
+        </text>
+      </svg>
+
+      <p class="arc-caption">
+        {{ store.summary().expiringWithin30Days }} of {{ store.summary().active }} active policies
+      </p>
+    </div>
+
+    <!-- ------------------------------------------------------------------ -->
+    <!-- GWP bars per line of business                                       -->
+    <!-- ------------------------------------------------------------------ -->
+    <div class="gwp-bars" aria-label="Gross written premium by line of business">
+      <h3 class="gwp-bars__title">GWP by Line of Business</h3>
+
+      @if (gwpBars().length === 0) {
+        <p class="gwp-bars__empty">No data</p>
+      }
+
+      @for (bar of gwpBars(); track bar.lob) {
+        <div class="gwp-bar-row">
+          <span class="gwp-bar-row__lob">{{ bar.lob }}</span>
+          <div class="gwp-bar-row__track" role="progressbar"
+               [attr.aria-valuenow]="bar.pct"
+               aria-valuemin="0" aria-valuemax="100"
+               [attr.aria-label]="bar.lob + ': ' + bar.label">
+            <!--
+              WHY [style.width.%]: Binding the width directly to the computed
+              percentage causes the browser to animate the change via the CSS
+              transition defined in the SCSS. No JS animation frame needed.
+            -->
+            <div class="gwp-bar-row__fill" [style.width.%]="bar.pct"></div>
+          </div>
+          <span class="gwp-bar-row__value">{{ bar.label }}</span>
+        </div>
+      }
+    </div>
+
+  </div>
+
+</section>

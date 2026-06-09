@@ -1,0 +1,83 @@
+// DECISION: Bulk bar uses a pill-shaped surface that floats above the table.
+// ALTERNATIVES CONSIDERED: A flat banner that pushes the table down; an overlay toast.
+// REASON: A sticky bar anchored above the table is always visible while the user
+//         scrolls — they can read "3 selected" without losing the table context.
+//         Pushing content down would cause layout shift each time selection changes.
+
+:host {
+  display: block;
+}
+
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: var(--mat-sys-corner-medium, 8px);
+  background-color: color-mix(in srgb, var(--mat-sys-primary) 8%, var(--mat-sys-surface));
+  border: 1px solid color-mix(in srgb, var(--mat-sys-primary) 20%, transparent);
+  flex-wrap: wrap;
+}
+
+// ---------------------------------------------------------------------------
+// Selection count label
+// ---------------------------------------------------------------------------
+
+.bulk-bar__count {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--mat-sys-on-surface);
+}
+
+.bulk-bar__count-icon {
+  color: var(--mat-sys-primary);
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+}
+
+// ---------------------------------------------------------------------------
+// Action buttons row
+// ---------------------------------------------------------------------------
+
+.bulk-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+// ---------------------------------------------------------------------------
+// Global snackbar override
+// The snackbar is rendered in a CDK overlay outside the component tree, so
+// :host and ::ng-deep cannot reach it. styles.scss COULD define .snack-flag-success,
+// but placing it here (with a :global pattern) keeps the intent colocated.
+// Angular doesn't currently support component-scoped :global, so this must be
+// added to styles.scss. The class name is documented here as the source of truth.
+//
+// NOTE: See styles.scss for the actual .snack-flag-success rule.
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Dark mode
+// ---------------------------------------------------------------------------
+
+:host-context(html.dark-theme) {
+  .bulk-bar {
+    background-color: color-mix(in srgb, var(--mat-sys-primary) 12%, var(--mat-sys-surface-container-low));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Reduced motion
+// ---------------------------------------------------------------------------
+
+@media (prefers-reduced-motion: reduce) {
+  .bulk-bar {
+    transition: none;
+  }
+}

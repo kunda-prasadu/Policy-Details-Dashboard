@@ -1,0 +1,264 @@
+// DECISION: Dialog SCSS defines status/LOB badge styles locally (not shared).
+// ALTERNATIVES CONSIDERED: Importing shared badge SCSS from PolicyTable.
+// REASON: Angular component SCSS is encapsulated by default. Sharing via a
+//         partial (_badges.scss) would require both components to @use the same
+//         partial AND expose the same CSS custom properties. For now, the badge
+//         definitions are intentionally duplicated here — they're 10 lines each —
+//         rather than creating a shared partial for two uses.
+//         If a third component needs badges, a shared partial becomes worthwhile.
+
+:host {
+  // Status pill colour tokens
+  --pill-active-bg:     rgba(46, 125, 50, 0.12);
+  --pill-active-text:   #1b5e20;
+  --pill-pending-bg:    rgba(245, 124, 0, 0.12);
+  --pill-pending-text:  #e65100;
+  --pill-expired-bg:    var(--mat-sys-surface-variant);
+  --pill-expired-text:  var(--mat-sys-on-surface-variant);
+  --pill-cancelled-bg:  rgba(198, 40, 40, 0.12);
+  --pill-cancelled-text: var(--mat-sys-error);
+
+  // Urgency badge colours
+  --urgency-critical-bg:   rgba(183, 28, 28, 0.14);
+  --urgency-critical-text: #b71c1c;
+  --urgency-high-bg:       rgba(230, 81, 0, 0.12);
+  --urgency-high-text:     #e65100;
+  --urgency-low-bg:        rgba(245, 124, 0, 0.10);
+  --urgency-low-text:      #f57c00;
+
+  // LOB chip colours (matches PolicyTable)
+  --lob-property-bg:   rgba(21, 101, 192, 0.10);
+  --lob-property-text: #0d47a1;
+  --lob-casualty-bg:   rgba(106, 27, 154, 0.10);
+  --lob-casualty-text: #4a148c;
+  --lob-marine-bg:     rgba(0, 131, 143, 0.10);
+  --lob-marine-text:   #006064;
+  --lob-a-h-bg:        rgba(130, 119, 23, 0.10);
+  --lob-a-h-text:      #827717;
+
+  --flag-pill-bg:   rgba(245, 124, 0, 0.12);
+  --flag-pill-text: #e65100;
+}
+
+:host-context(html.dark-theme) {
+  --pill-active-bg:     rgba(165, 214, 167, 0.18);
+  --pill-active-text:   #a5d6a7;
+  --pill-pending-bg:    rgba(255, 183, 77, 0.18);
+  --pill-pending-text:  #ffb74d;
+  --pill-cancelled-bg:  rgba(239, 154, 154, 0.18);
+  --pill-cancelled-text: #ef9a9a;
+
+  --urgency-critical-bg:   rgba(239, 154, 154, 0.20);
+  --urgency-critical-text: #ef9a9a;
+  --urgency-high-bg:       rgba(255, 183, 77, 0.18);
+  --urgency-high-text:     #ffb74d;
+  --urgency-low-bg:        rgba(255, 213, 79, 0.14);
+  --urgency-low-text:      #ffd54f;
+
+  --lob-property-bg:   rgba(144, 202, 249, 0.15);
+  --lob-property-text: #90caf9;
+  --lob-casualty-bg:   rgba(206, 147, 216, 0.15);
+  --lob-casualty-text: #ce93d8;
+  --lob-marine-bg:     rgba(128, 222, 234, 0.15);
+  --lob-marine-text:   #80deea;
+  --lob-a-h-bg:        rgba(230, 238, 156, 0.15);
+  --lob-a-h-text:      #e6ee9c;
+
+  --flag-pill-bg:   rgba(255, 183, 77, 0.18);
+  --flag-pill-text: #ffb74d;
+}
+
+// ---------------------------------------------------------------------------
+// 1. Dialog title
+// ---------------------------------------------------------------------------
+
+.dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.dialog-title__icon {
+  color: var(--mat-sys-primary);
+  font-size: 22px;
+  width: 22px;
+  height: 22px;
+}
+
+.dialog-title__count {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: var(--mat-sys-on-surface-variant);
+  margin-left: 2px;
+}
+
+// ---------------------------------------------------------------------------
+// 2. Dialog content
+// ---------------------------------------------------------------------------
+
+.dialog-content {
+  padding-top: 12px !important;
+}
+
+.dialog-empty {
+  color: var(--mat-sys-on-surface-variant);
+  padding: 24px 0;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+// ---------------------------------------------------------------------------
+// 3. Detail card
+// ---------------------------------------------------------------------------
+
+.detail-card {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.detail-card__badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+// ---------------------------------------------------------------------------
+// 4. 2-column detail grid
+// ---------------------------------------------------------------------------
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 8px 16px;
+  margin: 0;
+
+  dt {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--mat-sys-on-surface-variant);
+    display: flex;
+    align-items: center;
+  }
+
+  dd {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--mat-sys-on-surface);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+}
+
+.detail-card__actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+
+// ---------------------------------------------------------------------------
+// 5. Status pill
+// ---------------------------------------------------------------------------
+
+%pill-base {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.status-pill {
+  @extend %pill-base;
+  &--active    { background: var(--pill-active-bg);    color: var(--pill-active-text); }
+  &--pending   { background: var(--pill-pending-bg);   color: var(--pill-pending-text); }
+  &--expired   { background: var(--pill-expired-bg);   color: var(--pill-expired-text); }
+  &--cancelled { background: var(--pill-cancelled-bg); color: var(--pill-cancelled-text); }
+}
+
+.flag-pill {
+  @extend %pill-base;
+  background: var(--flag-pill-bg);
+  color: var(--flag-pill-text);
+  mat-icon { font-size: 14px; width: 14px; height: 14px; }
+}
+
+// ---------------------------------------------------------------------------
+// 6. LOB chip
+// ---------------------------------------------------------------------------
+
+.lob-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+
+  &--property  { background: var(--lob-property-bg);  color: var(--lob-property-text); }
+  &--casualty  { background: var(--lob-casualty-bg);  color: var(--lob-casualty-text); }
+  &--marine    { background: var(--lob-marine-bg);    color: var(--lob-marine-text); }
+  &--a-h       { background: var(--lob-a-h-bg);       color: var(--lob-a-h-text); }
+}
+
+// ---------------------------------------------------------------------------
+// 7. Days badge (expiry urgency)
+// ---------------------------------------------------------------------------
+
+.days-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 0.70rem;
+  font-weight: 700;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+
+  &--critical { background: var(--urgency-critical-bg); color: var(--urgency-critical-text); }
+  &--high     { background: var(--urgency-high-bg);     color: var(--urgency-high-text); }
+  &--low      { background: var(--urgency-low-bg);      color: var(--urgency-low-text); }
+}
+
+// ---------------------------------------------------------------------------
+// 8. List-mode table
+// ---------------------------------------------------------------------------
+
+.list-table-container {
+  overflow-x: auto;
+  border-radius: var(--mat-sys-corner-small, 4px);
+  border: 1px solid var(--mat-sys-outline-variant);
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.drilldown-table {
+  width: 100%;
+  min-width: 560px;
+}
+
+// Row tinting by urgency — applied as a class on the mat-row element
+.urgency-row {
+  &--critical { background-color: rgba(183, 28, 28, 0.06) !important; }
+  &--high     { background-color: rgba(230, 81, 0, 0.05) !important; }
+  &--low      { background-color: rgba(245, 124, 0, 0.04) !important; }
+}
+
+.mono {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 0.85rem;
+}

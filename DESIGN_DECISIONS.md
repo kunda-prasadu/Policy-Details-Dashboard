@@ -229,3 +229,49 @@ This document records every significant architectural and technical decision mad
 - Unix timestamp numbers
 
 **Reason:** `PolicyFilter` is serialised to both `localStorage` (via `JSON.stringify`) and URL query params. `Date` objects do not survive `JSON.stringify` round-trips (they become ISO strings with time components, then fail `new Date()` parsing on deserialisation). `YYYY-MM-DD` ISO strings are naturally sortable lexicographically, making the filter predicate in `filteredPolicies` a simple string comparison — no `Date` object allocation per row per filter evaluation.
+
+---
+
+## DD-020 · SVG `stroke-dashoffset` for the Expiry Arc (No Chart Library)
+
+**Decision:** The expiring-within-30-days indicator is a hand-authored SVG arc using `stroke-dasharray` + `stroke-dashoffset`, animated via a CSS `transition`.
+
+**Alternatives Considered:**
+- `@angular/material` progress spinner (no partial-arc support)
+- Third-party charting library (Chart.js, ECharts, D3)
+
+**Reason:** The arc is a single data point (one percentage). Importing a charting library for one arc circle adds 60–300 kB to the bundle. The SVG technique is 15 lines of markup and 10 lines of CSS, works offline, is server-renderable, and is fully accessible via `aria-label`. CSS `transition: stroke-dashoffset 600ms ease-in-out` provides smooth animation when the filter context changes without any JS animation loop.
+
+---
+
+## DD-021 · `renewingIds = signal<Set<string>>(new Set())` as Local Dialog State
+
+**Decision:** The "renewing in progress" state is tracked in a `WritableSignal<Set<string>>` local to `PolicyDrilldownDialog`, not in the global `PolicyStore`.
+
+**Alternatives Considered:**
+- A `renewingPolicyIds: WritableSignal<string[]>` in `PolicyStore`
+- A `Map<string, boolean>` in the component using `ChangeDetectorRef.markForCheck()`
+
+**Reason:** The renewing spinner is ephemeral UI feedback — it shows for 1500 ms then disappears regardless of API outcome. Storing this in the global store would: (a) mix UI presentation state with domain state; (b) require the store to export and manage the renewing set; (c) persist the state across dialog open/close cycles. A local signal scoped to the dialog lifetime is the correct granularity. A `Set` (not array) gives O(1) `.has()` lookup for template `[disabled]` bindings.
+
+---
+
+## DD-022 · Snapshot `selectedCount()` Before `flagSelectedPolicies()` in BulkActionBar
+
+**Decision:** `BulkActionBar.flagForReview()` captures `const count = this.store.selectedCount()` before calling `this.store.flagSelectedPolicies()`.
+
+**Alternatives Considered:**
+- Reading `store.selectedCount()` after the dispatch to construct the snackbar message.
+
+**Reason:** `store.flagSelectedPolicies()` calls `clearSelection()` as part of its optimistic update path. Signal updates are synchronous — by the time the next line reads `selectedCount()`, the selection has already been cleared (count = 0). Snapshotting before the dispatch guarantees the snackbar message reflects the actual number of policies actioned.
+
+---
+
+## DD-023 · Single `PolicyDrilldownDialog` for Both Detail and List Modes
+
+**Decision:** One dialog component handles `mode: 'detail'`, `mode: 'status'`, and `mode: 'expiring'` via `@if` branches in the template.
+
+**Alternatives Considered:**
+- Two separate dialog components: `PolicyDetailDialog` and `PolicyListDialog`.
+
+**Reason:** Both modes share: `MAT_DIALOG_DATA` injection, `MatDialogRef.close()` for dismissal, `renew()` and `flagDetail()` store actions, and the same dialog header/footer chrome. Merging them reduces file count from 6 to 3. The `@if` branches are clearly separated — neither bleeds into the other. If complexity grows (e.g. the list mode needs its own sort/filter), splitting becomes justified; premature at this stage.

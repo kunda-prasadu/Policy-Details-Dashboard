@@ -1,0 +1,244 @@
+<!--
+  WHY aria-labelledby="drilldown-dialog-title":
+  MatDialog sets aria-labelledby on the dialog container when the data object
+  contains no explicit ariaLabelledBy, OR when the opener passes `ariaLabelledBy`.
+  We set `id="drilldown-dialog-title"` on the mat-dialog-title element so the
+  browser's accessibility tree links the dialog container to its visible title.
+  This gives screen readers "Policy Details — dialog" rather than just "dialog".
+
+  WHY cdkFocusInitial on the close button:
+  By default, MatDialog focuses the first focusable element, which could be the
+  first form control or table cell — confusing for keyboard-only users who
+  opened the dialog accidentally. Placing cdkFocusInitial on the close button
+  ensures pressing Tab once moves forward from a known, predictable starting
+  point (the close × button), and pressing Enter immediately closes it.
+-->
+
+<h2 mat-dialog-title id="drilldown-dialog-title" class="dialog-title">
+  <mat-icon class="dialog-title__icon" aria-hidden="true">
+    @if (data.mode === 'detail') { description }
+    @else if (data.mode === 'expiring') { schedule }
+    @else { filter_list }
+  </mat-icon>
+  {{ dialogTitle() }}
+  <span class="dialog-title__count">
+    @if (data.mode !== 'detail') {
+      ({{ listPolicies().length }})
+    }
+  </span>
+</h2>
+
+<mat-dialog-content class="dialog-content">
+
+  <!-- ======================================================================
+       DETAIL MODE — single policy card
+       ====================================================================== -->
+  @if (data.mode === 'detail' && detailPolicy(); as policy) {
+
+    <div class="detail-card">
+
+      <!-- Badge row: status pill + flag pill -->
+      <div class="detail-card__badges">
+        <span [class]="'status-pill status-pill--' + policy.status.toLowerCase()">
+          {{ policy.status }}
+        </span>
+        @if (policy.flaggedForReview) {
+          <span class="flag-pill">
+            <mat-icon aria-hidden="true">flag</mat-icon>
+            Flagged for review
+          </span>
+        }
+      </div>
+
+      <!-- 2-column detail grid: 9 fields -->
+      <dl class="detail-grid">
+
+        <dt>Policy #</dt>
+        <dd class="mono">{{ policy.policyNumber }}</dd>
+
+        <dt>Policyholder</dt>
+        <dd>{{ policy.policyHolderName }}</dd>
+
+        <dt>Line of Business</dt>
+        <dd>
+          <span [class]="'lob-chip lob-chip--' + getLobClass(policy.lineOfBusiness)">
+            {{ policy.lineOfBusiness }}
+          </span>
+        </dd>
+
+        <dt>Region</dt>
+        <dd>{{ policy.region }}</dd>
+
+        <dt>Premium</dt>
+        <dd class="mono">{{ formatPremium(policy.premiumAmount, policy.currency) }}</dd>
+
+        <dt>Currency</dt>
+        <dd>{{ policy.currency }}</dd>
+
+        <dt>Effective Date</dt>
+        <dd>{{ formatDate(policy.effectiveDate) }}</dd>
+
+        <dt>Expiry Date</dt>
+        <dd>
+          {{ formatDate(policy.expiryDate) }}
+          @if (daysLabel(policy.expiryDate)) {
+            <!--
+              WHY days-badge inline with expiry: Underwriters scan the expiry date
+              column to prioritise renewals. Showing the "Xd left" badge directly
+              next to the date removes the need to mentally calculate days remaining.
+            -->
+            <span [class]="'days-badge days-badge--' + urgencyClass(policy.expiryDate)">
+              {{ daysLabel(policy.expiryDate) }}
+            </span>
+          }
+        </dd>
+
+        <dt>Underwriter</dt>
+        <dd>{{ policy.underwriter }}</dd>
+
+      </dl>
+
+      <!-- Detail actions -->
+      <div class="detail-card__actions">
+
+        @if (policy.status === 'Expired' || policy.status === 'Cancelled') {
+          <button
+            mat-flat-button
+            color="primary"
+            (click)="renew(policy.id)"
+            [disabled]="renewingIds().has(policy.id)"
+            [attr.aria-label]="'Renew policy ' + policy.policyNumber"
+          >
+            @if (renewingIds().has(policy.id)) {
+              <mat-spinner diameter="18" />
+            } @else {
+              <mat-icon>autorenew</mat-icon>
+            }
+            Renew
+          </button>
+        }
+
+        @if (!policy.flaggedForReview) {
+          <button
+            mat-stroked-button
+            (click)="flagDetail()"
+            [attr.aria-label]="'Flag policy ' + policy.policyNumber + ' for review'"
+          >
+            <mat-icon>flag</mat-icon>
+            Flag for Review
+          </button>
+        }
+
+      </div>
+
+    </div>
+
+  } @else if (data.mode === 'detail') {
+    <!-- Fallback if policy not found -->
+    <p class="dialog-empty">Policy data unavailable.</p>
+  }
+
+  <!-- ======================================================================
+       LIST MODE — filtered mat-table (status or expiring)
+       ====================================================================== -->
+  @if (data.mode !== 'detail') {
+
+    @if (listPolicies().length === 0) {
+      <p class="dialog-empty">No policies match this criteria.</p>
+    } @else {
+
+      <div class="list-table-container" role="region" [attr.aria-label]="dialogTitle() + ' policy list'">
+
+        <mat-table [dataSource]="listPolicies()" class="drilldown-table">
+
+          <!-- Policy number -->
+          <ng-container matColumnDef="policyNumber">
+            <th mat-header-cell *matHeaderCellDef>Policy #</th>
+            <td mat-cell *matCellDef="let row" class="mono">{{ row.policyNumber }}</td>
+          </ng-container>
+
+          <!-- Policyholder -->
+          <ng-container matColumnDef="policyHolderName">
+            <th mat-header-cell *matHeaderCellDef>Policyholder</th>
+            <td mat-cell *matCellDef="let row">{{ row.policyHolderName }}</td>
+          </ng-container>
+
+          <!-- Status -->
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>Status</th>
+            <td mat-cell *matCellDef="let row">
+              <span [class]="'status-pill status-pill--' + row.status.toLowerCase()">
+                {{ row.status }}
+              </span>
+            </td>
+          </ng-container>
+
+          <!-- Region -->
+          <ng-container matColumnDef="region">
+            <th mat-header-cell *matHeaderCellDef>Region</th>
+            <td mat-cell *matCellDef="let row">{{ row.region }}</td>
+          </ng-container>
+
+          <!-- Expiry date + urgency badge -->
+          <ng-container matColumnDef="expiryDate">
+            <th mat-header-cell *matHeaderCellDef>Expiry</th>
+            <td mat-cell *matCellDef="let row">
+              {{ formatDate(row.expiryDate) }}
+              @if (daysLabel(row.expiryDate)) {
+                <span [class]="'days-badge days-badge--' + urgencyClass(row.expiryDate)">
+                  {{ daysLabel(row.expiryDate) }}
+                </span>
+              }
+            </td>
+          </ng-container>
+
+          <!-- Row actions -->
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>
+              <span class="sr-only">Actions</span>
+            </th>
+            <td mat-cell *matCellDef="let row">
+              @if (row.status === 'Expired' || row.status === 'Cancelled') {
+                <button
+                  mat-icon-button
+                  (click)="renew(row.id)"
+                  [disabled]="renewingIds().has(row.id)"
+                  [attr.aria-label]="'Renew ' + row.policyNumber"
+                  matTooltip="Renew this policy"
+                >
+                  @if (renewingIds().has(row.id)) {
+                    <mat-spinner diameter="20" />
+                  } @else {
+                    <mat-icon>autorenew</mat-icon>
+                  }
+                </button>
+              }
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="listColumns; sticky: true"></tr>
+          <tr
+            mat-row
+            *matRowDef="let row; columns: listColumns;"
+            [class]="'urgency-row urgency-row--' + urgencyClass(row.expiryDate)"
+          ></tr>
+
+        </mat-table>
+
+      </div>
+    }
+  }
+
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button
+    mat-button
+    mat-dialog-close
+    cdkFocusInitial
+    aria-label="Close this dialog"
+  >
+    <mat-icon>close</mat-icon>
+    Close
+  </button>
+</mat-dialog-actions>
