@@ -37,6 +37,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `styles.scss` — `.snack-flag-success` global snackbar override (green background)
 - Documentation: `ARCHITECTURE.md`, `DESIGN_DECISIONS.md` (DD-001–DD-019), `AI-JOURNAL.md` (Sessions 001–005), `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`
 - GitHub templates: PR template, bug report, feature request
+- `PolicyDashboard` page (`pages/policy-dashboard/`) — orchestrates all feature components; `ngOnInit` triggers `store.loadPolicies()`; `@defer (on idle)` defers table section; `hasResults` computed signal
+- `src/app/shared/loading-skeleton/` — CSS-only shimmer animation; summary card + table row placeholders; `prefers-reduced-motion` aware; `role="status" aria-busy`
+- `src/app/shared/error-state/` — error card with `message` input and `retryClick` output; store-agnostic
+- `src/app/shared/empty-state/` — `search_off` icon; `title`/`description` inputs; `clearFilters` output; store-agnostic
+- `src/app/shared/theme-picker/` — `ThemePickerComponent`; 10-palette swatch grid in `MatMenu`; runtime CSS custom property overrides on `document.documentElement`; `PALETTE_STORAGE_KEY` persistence
+- `app.ts` / `app.html` / `app.scss` — app shell rewritten: sticky toolbar, "Policy Hub" / "Chubb APAC" brand, ThemePicker + dark/light toggle actions
+- `app.routes.ts` — `loadComponent()` lazy-loads `PolicyDashboard` at `path: ''`
+- `PALETTE_STORAGE_KEY = 'policy-hub-palette'` added to `policy.constants.ts`
+- Design decisions DD-020–DD-023 (Prompt 6) and DD-024–DD-027 (Prompt 7) added to `DESIGN_DECISIONS.md`
 
 ### Fixed
 - Angular 20.0.3 SSR `NG0401 Missing Platform` bug — `BootstrapContext` now forwarded in `main.server.ts`

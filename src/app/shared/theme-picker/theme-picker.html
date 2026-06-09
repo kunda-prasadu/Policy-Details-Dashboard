@@ -1,0 +1,48 @@
+<!--
+  WHY (click)="$event.stopPropagation()" on the palette-grid div:
+  MatMenu closes when a click event bubbles up through the overlay backdrop.
+  Wrapping the grid in a stopPropagation handler prevents accidental closure
+  when the user clicks the gap between swatches rather than a swatch button.
+  The MatMenuTrigger.closeMenu() call in selectPalette() handles intentional
+  closure after a valid swatch click.
+-->
+
+<!-- Trigger button: palette icon opens the swatch menu -->
+<button
+  mat-icon-button
+  [matMenuTriggerFor]="swatchMenu"
+  aria-label="Change colour palette"
+  aria-haspopup="menu"
+  matTooltip="Choose colour palette"
+  matTooltipPosition="below"
+>
+  <mat-icon>palette</mat-icon>
+</button>
+
+<!-- Swatch menu: 5×2 grid of colour circles -->
+<mat-menu #swatchMenu="matMenu" class="palette-picker-menu">
+  <div
+    class="palette-grid"
+    role="group"
+    aria-label="Colour palette options"
+    (click)="$event.stopPropagation()"
+  >
+    @for (palette of palettes; track palette.id) {
+      <button
+        type="button"
+        class="swatch"
+        [class.swatch--active]="activePaletteId() === palette.id"
+        [style.background-color]="palette.swatch"
+        [matTooltip]="palette.name"
+        matTooltipPosition="above"
+        (click)="selectPalette(palette)"
+        [attr.aria-label]="palette.name + (activePaletteId() === palette.id ? ' (active)' : '')"
+        [attr.aria-pressed]="activePaletteId() === palette.id"
+      >
+        @if (activePaletteId() === palette.id) {
+          <mat-icon class="swatch__check" aria-hidden="true">check</mat-icon>
+        }
+      </button>
+    }
+  </div>
+</mat-menu>

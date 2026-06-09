@@ -60,8 +60,10 @@ src/app/
 │       └── error.interceptor.ts Normalises all HTTP errors (NormalisedHttpError)
 │
 ├── shared/                    Reusable presentational components & utilities
-│   ├── components/            (added in Prompt 3+)
-│   └── pipes/                 (added in Prompt 3+)
+│   ├── loading-skeleton/      CSS shimmer placeholder (no store dependency)
+│   ├── error-state/           Error card with retryClick output
+│   ├── empty-state/           Zero-results card with clearFilters output
+│   └── theme-picker/          Palette swatch grid (MatMenu); runtime CSS token overrides
 │
 └── features/
     └── policy-dashboard/      Lazy-loaded feature domain
@@ -69,6 +71,8 @@ src/app/
         ├── constants/         Typed const arrays (REGIONS, POLICY_STATUSES, etc.)
         ├── store/             Signal-based state (PolicyStore)
         ├── services/          PolicyApiService
+        ├── pages/
+        │   └── policy-dashboard/  Routed page component (lazy-loaded via loadComponent)
         ├── components/
         │   ├── policy-table/  Paginated, sortable, selectable mat-table
         │   ├── policy-filter/ Search bar + chip strip + URL/storage sync

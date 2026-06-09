@@ -1,0 +1,36 @@
+<!--
+  WHY shimmer via CSS gradient animation rather than a spinner:
+  A spinner communicates "waiting" but gives no indication of the content
+  shape. Skeleton screens communicate both "loading" and "here is roughly
+  what you will see", reducing perceived wait time (Google research, 2017).
+  The shimmer effect is CSS-only (no JS, no setInterval), so it works even
+  if Angular's change detection is not yet running.
+-->
+
+<!-- Summary panel skeleton: 4 stat cards in a row -->
+<div class="skeleton-summary">
+  @for (card of rowCount.slice(0, 4); track $index) {
+    <div class="shimmer skeleton-card">
+      <div class="shimmer__line shimmer__line--short"></div>
+      <div class="shimmer__line shimmer__line--wide"></div>
+    </div>
+  }
+</div>
+
+<!-- Table header skeleton -->
+<div class="skeleton-header shimmer">
+  @for (col of rowCount.slice(0, 5); track $index) {
+    <div class="shimmer__line shimmer__line--medium"></div>
+  }
+</div>
+
+<!-- Table row skeletons -->
+@for (row of rowCount; track $index) {
+  <div class="skeleton-row shimmer">
+    <div class="shimmer__line shimmer__line--narrow"></div>
+    <div class="shimmer__line shimmer__line--wide"></div>
+    <div class="shimmer__line shimmer__line--medium"></div>
+    <div class="shimmer__line shimmer__line--short"></div>
+    <div class="shimmer__line shimmer__line--medium"></div>
+  </div>
+}

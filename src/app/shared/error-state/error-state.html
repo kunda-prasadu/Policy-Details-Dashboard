@@ -1,0 +1,15 @@
+<div class="error-card">
+  <mat-icon class="error-card__icon" aria-hidden="true">error_outline</mat-icon>
+  <h2 class="error-card__title">Unable to load policies</h2>
+  <p class="error-card__message">{{ message() }}</p>
+  <button
+    mat-flat-button
+    color="primary"
+    class="error-card__retry"
+    (click)="retryClick.emit()"
+    aria-label="Try loading policies again"
+  >
+    <mat-icon>refresh</mat-icon>
+    Try Again
+  </button>
+</div>
