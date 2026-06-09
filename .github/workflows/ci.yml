@@ -1,0 +1,78 @@
+# ---------------------------------------------------------------------------
+# CI workflow — Policy Hub (Angular 20 + Jasmine/Karma)
+#
+# DECISION: Single job with sequential steps for simplicity on a single-app repo.
+# ALTERNATIVES CONSIDERED: Separate jobs for lint/test/build (parallel) — overkill
+# for one app; adds workflow complexity without meaningful speed gains at this scale.
+# REASON: Sequential steps share the node_modules cache from a single npm ci,
+# keeping total run time shorter than spinning up 3 separate runners.
+#
+# WHY --legacy-peer-deps: Angular 20 + @angular/material 20 + some transitive
+# dependencies have peer-dep conflicts that would fail a strict npm ci without this
+# flag. This is a known Angular ecosystem issue and is safe for CI builds.
+#
+# WHY --no-sandbox for Chrome: GitHub Actions runners run as root in Docker
+# containers. Chromium refuses to run as root unless --no-sandbox is set.
+# This is the standard workaround for headless browser tests in CI.
+# ---------------------------------------------------------------------------
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    name: Lint · Test · Build
+    runs-on: ubuntu-latest
+
+    steps:
+      # -----------------------------------------------------------------------
+      # 1. Checkout source
+      # -----------------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # 2. Set up Node.js 20 with npm cache
+      # -----------------------------------------------------------------------
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          # WHY cache: Caches node_modules between runs when package-lock.json
+          # has not changed, cutting install time from ~90s to ~10s on cache hit.
+          cache: 'npm'
+
+      # -----------------------------------------------------------------------
+      # 3. Install dependencies
+      # -----------------------------------------------------------------------
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        working-directory: Policy-Details-Dashboard
+
+      # -----------------------------------------------------------------------
+      # 4. Lint
+      # -----------------------------------------------------------------------
+      - name: Lint
+        run: npm run lint
+        working-directory: Policy-Details-Dashboard
+
+      # -----------------------------------------------------------------------
+      # 5. Unit tests (Karma + ChromeHeadless, no-sandbox for CI Docker env)
+      # -----------------------------------------------------------------------
+      - name: Run unit tests
+        # WHY --karma-config: karma.conf.js defines ChromeHeadlessNoSandbox with
+        # --no-sandbox, required because GitHub Actions runners run as root in Docker.
+        run: npx ng test --watch=false --karma-config=karma.conf.js
+        working-directory: Policy-Details-Dashboard
+
+      # -----------------------------------------------------------------------
+      # 6. Production build (verifies no tree-shaking or AOT compile errors)
+      # -----------------------------------------------------------------------
+      - name: Build
+        run: npm run build
+        working-directory: Policy-Details-Dashboard
