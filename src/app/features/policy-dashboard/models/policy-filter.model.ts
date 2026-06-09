@@ -65,4 +65,20 @@ export interface PolicyFilter {
    * Combined with premiumMin to form a range filter.
    */
   premiumMax?: number;
+
+  /**
+   * ISO 8601 date string (YYYY-MM-DD). Returns only policies whose
+   * `effectiveDate` is on or after this date.
+   *
+   * WHY ISO STRINGS NOT Date OBJECTS: The PolicyFilter is serialised to
+   * localStorage and URL query params. Strings round-trip cleanly through
+   * JSON.stringify and router query params; Date objects do not.
+   */
+  effectiveDateFrom?: string;
+
+  /**
+   * ISO 8601 date string (YYYY-MM-DD). Returns only policies whose
+   * `effectiveDate` is on or before this date.
+   */
+  effectiveDateTo?: string;
 }

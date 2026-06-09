@@ -1,0 +1,115 @@
+<!--
+  WHY SEARCH FIELD + BUTTON + CHIP STRIP LAYOUT:
+  Underwriters' primary filter action is free-text search. Placing it prominently
+  (full-width input) minimises clicks for the most common operation. The "All Filters"
+  button is secondary; it opens the bottom sheet only when advanced filtering is needed.
+  Active filter chips provide persistent visibility of what is currently filtered, so
+  users don't forget they are looking at a subset.
+-->
+
+<div class="filter-bar" role="search" aria-label="Filter policies">
+
+  <!-- ===================================================================== -->
+  <!-- Row 1: Search input + All Filters button                              -->
+  <!-- ===================================================================== -->
+  <div class="filter-bar__controls" [formGroup]="form">
+
+    <!-- Free-text search field -->
+    <mat-form-field appearance="outline" class="search-field" subscriptSizing="dynamic">
+      <mat-label>Search by policy # or holder name</mat-label>
+      <input
+        matInput
+        type="search"
+        formControlName="searchTerm"
+        autocomplete="off"
+        aria-label="Search policies"
+      />
+      <!--
+        WHY mat-icon-button NOT mat-icon DIRECTLY: The clickable clear button
+        needs to be keyboard-accessible and have a proper touch target. A button
+        wrapping the icon provides both, whereas a plain icon does not.
+      -->
+      @if (form.get('searchTerm')?.value) {
+        <button
+          matSuffix
+          mat-icon-button
+          aria-label="Clear search"
+          matTooltip="Clear search"
+          (click)="form.get('searchTerm')?.setValue('')"
+        >
+          <mat-icon>close</mat-icon>
+        </button>
+      } @else {
+        <mat-icon matSuffix aria-hidden="true">search</mat-icon>
+      }
+    </mat-form-field>
+
+    <!-- "All Filters" button with active-count badge -->
+    <!--
+      WHY [matBadge]="activeFilterCount() || null":
+      Passing null hides the badge entirely (no empty "0" badge shown).
+      The badge only appears when at least one advanced filter is active —
+      giving users an instant visual signal that the list is filtered.
+    -->
+    <button
+      mat-stroked-button
+      class="filters-button"
+      (click)="openFilters()"
+      [matBadge]="activeFilterCount() || null"
+      matBadgeColor="accent"
+      matBadgeSize="small"
+      matBadgePosition="above after"
+      [attr.aria-label]="activeFilterCount() > 0
+        ? 'Open advanced filters (' + activeFilterCount() + ' active)'
+        : 'Open advanced filters'"
+    >
+      <mat-icon>tune</mat-icon>
+      All Filters
+    </button>
+
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- Row 2: Active filter chip strip                                       -->
+  <!-- ===================================================================== -->
+  <!--
+    WHY @if WRAPS THE ENTIRE STRIP: If there are no chips the whole container
+    collapses cleanly — no extra empty row / gap in the layout.
+  -->
+  @if (activeFilterChips().length > 0) {
+    <div class="filter-bar__chips" role="group" aria-label="Active filters">
+
+      @for (chip of activeFilterChips(); track chip.key) {
+        <span class="active-filter-chip">
+          {{ chip.label }}
+          <button
+            class="active-filter-chip__remove"
+            (click)="removeFilter(chip.key)"
+            [attr.aria-label]="'Remove filter: ' + chip.label"
+            matTooltip="Remove this filter"
+            matTooltipShowDelay="500"
+          >
+            <!--
+              WHY ✕ UNICODE INSTEAD OF mat-icon: The mat-icon 'close' at 18px
+              is larger than needed for an inline chip button. Using the ✕
+              character keeps the chip visually compact and avoids loading an
+              extra icon glyph for this common UI affordance.
+            -->
+            &times;
+          </button>
+        </span>
+      }
+
+      <button
+        mat-button
+        class="clear-all-button"
+        (click)="clearAllFilters()"
+        aria-label="Clear all advanced filters"
+      >
+        Clear all
+      </button>
+
+    </div>
+  }
+
+</div>

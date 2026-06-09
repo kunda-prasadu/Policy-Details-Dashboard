@@ -1,0 +1,167 @@
+// DECISION: Filter bar uses flexbox layout with chip strip on a second row.
+// ALTERNATIVES CONSIDERED: Single-row layout that wraps chips with the controls.
+// REASON: Wrapping chips with the search field creates unpredictable height changes
+//         each time filters are added/removed. A dedicated second row is visually
+//         stable — the controls row never reflows when chips appear/disappear.
+
+:host {
+  display: block;
+}
+
+// ---------------------------------------------------------------------------
+// 1. Filter bar container
+// ---------------------------------------------------------------------------
+
+.filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: var(--space-2, 16px) var(--space-2, 16px) 0;
+}
+
+// ---------------------------------------------------------------------------
+// 2. Controls row: search field + filters button
+// ---------------------------------------------------------------------------
+
+.filter-bar__controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+// WHY flex: 1 1 280px: The search field should fill available space on wide
+// screens and shrink gracefully on narrow viewports. The minimum 280px prevents
+// the field from becoming too small to type in before the row wraps.
+.search-field {
+  flex: 1 1 280px;
+  min-width: 280px;
+}
+
+// "All Filters" button — fixed width so it never wraps mid-label.
+// The MatBadge appears as an absolute-positioned overlay, so the button width
+// stays stable regardless of whether the badge is visible.
+.filters-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  gap: 6px;
+
+  // Tighten the icon-to-label gap inside the button
+  ::ng-deep .mat-icon {
+    margin-inline-end: 4px;
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 3. Active filter chip strip
+// ---------------------------------------------------------------------------
+
+.filter-bar__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: var(--space-1, 8px);
+  animation: chips-enter 150ms ease-out;
+}
+
+// WHY ANIMATION: A subtle fade-in prevents the chip row from appearing to "pop"
+// into existence when the first filter is applied. Chips fade out via Angular's
+// @if removal — no explicit leave animation needed.
+@keyframes chips-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 4. Individual filter chip
+// ---------------------------------------------------------------------------
+
+.active-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px 4px 12px;
+  border-radius: 16px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  background-color: color-mix(in srgb, var(--mat-sys-primary) 12%, transparent);
+  color: var(--mat-sys-primary);
+  border: 1px solid color-mix(in srgb, var(--mat-sys-primary) 25%, transparent);
+  white-space: nowrap;
+}
+
+// The × remove button inside the chip
+.active-filter-chip__remove {
+  // Reset browser button defaults
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+
+  // Sizing — inline with the chip text
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  font-size: 14px;
+  border-radius: 50%;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  color: inherit;
+  opacity: 0.7;
+  transition: opacity 150ms ease, background-color 150ms ease;
+
+  &:hover,
+  &:focus-visible {
+    opacity: 1;
+    background-color: color-mix(in srgb, var(--mat-sys-primary) 20%, transparent);
+    outline: none;
+  }
+}
+
+// "Clear all" text button — lowercase, muted, sits inline with the chips
+.clear-all-button {
+  font-size: 0.78rem;
+  color: var(--mat-sys-on-surface-variant);
+  padding: 4px 8px;
+  min-width: unset;
+}
+
+// ---------------------------------------------------------------------------
+// 5. Dark mode
+// ---------------------------------------------------------------------------
+
+:host-context(html.dark-theme) {
+  .active-filter-chip {
+    background-color: color-mix(in srgb, var(--mat-sys-primary) 18%, transparent);
+    border-color: color-mix(in srgb, var(--mat-sys-primary) 35%, transparent);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 6. Reduced motion
+// ---------------------------------------------------------------------------
+
+@media (prefers-reduced-motion: reduce) {
+  .filter-bar__chips {
+    animation: none;
+  }
+
+  .active-filter-chip__remove {
+    transition: none;
+  }
+}

@@ -176,7 +176,9 @@ export class PolicyStore {
       f.currencies?.length ||
       f.flaggedForReview !== undefined ||
       f.premiumMin !== undefined ||
-      f.premiumMax !== undefined;
+      f.premiumMax !== undefined ||
+      f.effectiveDateFrom !== undefined ||
+      f.effectiveDateTo !== undefined;
 
     if (!hasFilters) {
       return all;
@@ -211,6 +213,13 @@ export class PolicyStore {
       // Premium range filter
       if (f.premiumMin !== undefined && p.premiumAmount < f.premiumMin) return false;
       if (f.premiumMax !== undefined && p.premiumAmount > f.premiumMax) return false;
+
+      // Effective date range filter
+      // WHY STRING COMPARISON: effectiveDate is stored as ISO 8601 (YYYY-MM-DD).
+      // Lexicographic string comparison is equivalent to chronological order for
+      // that format, avoiding Date object allocation on every row evaluation.
+      if (f.effectiveDateFrom && p.effectiveDate < f.effectiveDateFrom) return false;
+      if (f.effectiveDateTo && p.effectiveDate > f.effectiveDateTo) return false;
 
       return true;
     });

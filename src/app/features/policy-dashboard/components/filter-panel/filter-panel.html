@@ -1,0 +1,148 @@
+<!--
+  WHY TWO-COLUMN GRID ON WIDE SHEETS: The filter panel has 6 fields. A single-column
+  layout would make the sheet very tall on desktop, requiring scrolling. A 2-column
+  grid lets logically related pairs sit side-by-side (start/end date, min/max premium)
+  while each control remains wide enough to be usable.
+-->
+
+<div class="filter-panel" [formGroup]="form" role="dialog" aria-label="Advanced policy filters">
+
+  <!-- Header ---------------------------------------------------------------- -->
+  <div class="filter-panel__header">
+    <mat-icon aria-hidden="true">tune</mat-icon>
+    <h2 class="filter-panel__title">Advanced Filters</h2>
+  </div>
+
+  <mat-divider />
+
+  <!-- Body: filter controls ------------------------------------------------- -->
+  <div class="filter-panel__body">
+
+    <!-- Status -->
+    <mat-form-field appearance="outline" class="field-full">
+      <mat-label>Status</mat-label>
+      <mat-select formControlName="status" aria-label="Filter by policy status">
+        <!--
+          WHY NULL OPTION: The form uses null to mean "no filter applied".
+          Providing an explicit "(Any)" option lets the user actively de-select a
+          previously chosen status without having to call reset().
+        -->
+        <mat-option [value]="null">(Any)</mat-option>
+        @for (s of POLICY_STATUSES; track s) {
+          <mat-option [value]="s">{{ s }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <!-- Region -->
+    <mat-form-field appearance="outline" class="field-full">
+      <mat-label>Region</mat-label>
+      <mat-select formControlName="region" aria-label="Filter by APAC region">
+        <mat-option [value]="null">(Any)</mat-option>
+        @for (r of REGIONS; track r) {
+          <mat-option [value]="r">{{ r }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <!-- Line of Business -->
+    <mat-form-field appearance="outline" class="field-full">
+      <mat-label>Line of Business</mat-label>
+      <mat-select formControlName="lineOfBusiness" aria-label="Filter by line of business">
+        <mat-option [value]="null">(Any)</mat-option>
+        @for (lob of LINES_OF_BUSINESS; track lob) {
+          <mat-option [value]="lob">{{ lob }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <!-- Effective date range — side by side on wide viewports -->
+    <div class="date-range-row">
+
+      <mat-form-field appearance="outline" class="field-half">
+        <mat-label>Effective from</mat-label>
+        <input
+          matInput
+          [matDatepicker]="startPicker"
+          formControlName="startDate"
+          aria-label="Effective date from"
+          readonly
+        />
+        <mat-datepicker-toggle matIconSuffix [for]="startPicker" />
+        <mat-datepicker #startPicker />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="field-half">
+        <mat-label>Effective to</mat-label>
+        <input
+          matInput
+          [matDatepicker]="endPicker"
+          formControlName="endDate"
+          aria-label="Effective date to"
+          [min]="form.get('startDate')?.value"
+          readonly
+        />
+        <mat-datepicker-toggle matIconSuffix [for]="endPicker" />
+        <mat-datepicker #endPicker />
+      </mat-form-field>
+
+    </div>
+
+    <!-- Minimum premium -->
+    <!--
+      WHY NUMBER INPUT NOT SLIDER: A slider is intuitive for bounded numeric ranges
+      where both ends are known. Premium ranges span from a few hundred to several
+      million USD — a slider with such a wide range is imprecise. A number input
+      lets the user type an exact threshold.
+    -->
+    <mat-form-field appearance="outline" class="field-full">
+      <mat-label>Minimum premium (USD)</mat-label>
+      <input
+        matInput
+        type="number"
+        formControlName="minPremium"
+        min="0"
+        step="1000"
+        aria-label="Minimum premium amount in USD"
+      />
+      <span matTextSuffix aria-hidden="true">USD</span>
+    </mat-form-field>
+
+  </div>
+
+  <mat-divider />
+
+  <!-- Footer: action buttons ------------------------------------------------ -->
+  <div class="filter-panel__footer">
+
+    <!--
+      WHY RESET LEFT, APPLY RIGHT:
+      Convention in form-heavy UIs places the destructive/secondary action on the
+      left and the primary/constructive action on the right. The eye naturally
+      tracks left-to-right, so "Apply" (right) is the last thing the user sees
+      before actioning — reducing mis-clicks on Reset.
+    -->
+    <button
+      mat-button
+      class="btn-reset"
+      (click)="reset()"
+      aria-label="Reset all filters to defaults"
+    >
+      <mat-icon>restart_alt</mat-icon>
+      Reset
+    </button>
+
+    <button
+      mat-flat-button
+      color="primary"
+      class="btn-apply"
+      (click)="apply()"
+      aria-label="Apply these filter selections"
+    >
+      <mat-icon>check</mat-icon>
+      Apply Filters
+    </button>
+
+  </div>
+
+</div>

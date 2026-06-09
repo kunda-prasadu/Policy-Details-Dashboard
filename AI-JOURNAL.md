@@ -97,4 +97,81 @@ Also changed `app.routes.server.ts` from `RenderMode.Prerender` to `RenderMode.S
 
 ---
 
+---
+
+## Session 004 — 2026-06-09 · Prompt 4: PolicyTable Component
+
+### What was built
+
+**`src/app/features/policy-dashboard/components/policy-table/`**
+- `policy-table.ts` — `PolicyTable` standalone component (`ChangeDetectionStrategy.OnPush`, `AfterViewInit`)
+- `policy-table.html` — 9-column `mat-table` with sticky header, bulk checkbox, status/LOB badges, flag icon, actions column, `*matNoDataRow`, `mat-paginator`
+- `policy-table.scss` — component-scoped CSS custom properties for badge colours with `:host-context(html.dark-theme)` overrides; `.is-selected` row highlight; `.is-flagged` left accent border; compact premium column; `prefers-reduced-motion` override for sort-arrow animation
+
+**`src/app/features/policy-dashboard/constants/policy.constants.ts`**
+- Added `PAGE_SIZE_STORAGE_KEY = 'policy-hub-page-size'`
+
+### Key Decisions
+
+**`_pageIndex` / `_pageSize` as signals (not reading `dataSource.paginator.pageIndex`):**
+`MatTableDataSource.filteredData` is updated asynchronously via its internal RxJS pipeline. Reading it synchronously inside a `computed()` or `effect()` returns stale data, causing `isAllOnPageSelected` to be permanently false. The fix: track page state in `WritableSignal<number>` values updated directly from the `paginator.page` subscription, and derive `pageIds` from `store.filteredPolicies()` (which is synchronous).
+
+**Server-side sort, not `dataSource.sort`:**
+Assigning `dataSource.sort` triggers client-side sort on the local data array. Instead, `sortChange` events are subscribed and forwarded to `store.updateSort()`, which rebuilds query params and triggers a fresh API call.
+
+**Constructor `effect()` for data sync:**
+An `effect()` in the constructor updates `dataSource.data = store.filteredPolicies()`, calls `paginatorRef()?.firstPage()`, and resets `_pageIndex` to 0 whenever the filtered data changes. This ensures the paginator stays on page 1 after filter changes.
+
+**`formatPremium` — compact K/M suffixes:**
+`getCurrencySymbol(currencyCode, 'narrow', locale)` provides locale-aware symbols. Values ≥ 1M render as `S$1.2M`, ≥ 1K as `S$123K`, otherwise raw — designed for scanning, not precision.
+
+### Build Result
+`Application bundle generation complete. [2.537 seconds]` — 0 errors, 0 warnings.
+
+---
+
+## Session 005 — 2026-06-09 · Prompt 5: Filter Components (PolicyFilter + FilterPanel)
+
+### What was built
+
+**`src/app/features/policy-dashboard/components/policy-filter/`**
+- `policy-filter.ts` — `PolicyFilter` component; owns the filter `FormGroup`; bridges form → store, localStorage, and URL
+- `policy-filter.html` — search input + "All Filters" badge button + active chip strip
+- `policy-filter.scss` — two-row flex layout, chip fade-in animation, `prefers-reduced-motion` override
+
+**`src/app/features/policy-dashboard/components/filter-panel/`**
+- `filter-panel.ts` — `FilterPanel` bottom sheet content component; seeded from `MAT_BOTTOM_SHEET_DATA`; dismisses with typed result
+- `filter-panel.html` — Status / Region / LOB selects + date range pickers + min premium input + Apply / Reset footer
+- `filter-panel.scss` — flex column layout, sticky footer via `margin-top: auto`, 2-column date grid, dark mode surface override
+
+**Model changes:**
+- `policy-filter.model.ts` — added `effectiveDateFrom?: string` and `effectiveDateTo?: string` (ISO 8601 strings, not `Date` — for clean localStorage and URL serialisation)
+- `policy.store.ts` — extended `hasFilters` check and `filteredPolicies` predicate with ISO date string range comparison
+
+**Constants:**
+- `FILTER_STORAGE_KEY = 'policy-hub-filters'` added to `policy.constants.ts`
+
+### Key Decisions
+
+**Two `formValueChanges` subscriptions (immediate + debounced 400 ms):**
+Store updates must be immediate for instant table feedback (client-side filter on local data). URL and localStorage writes are debounced to prevent history-stack spam and excessive I/O while the user types.
+
+**Seed priority: URL query params → localStorage → defaults:**
+URL params enable deep-linking and shareable filter contexts. localStorage restores the last session. Defaults are the safe fallback. The form is built with seeded values (not patched after construction) so `valueChanges` does not emit during construction.
+
+**Signal snapshot (`_formSnapshot: WritableSignal<PolicyFilterFormValue>`):**
+`activeFilterCount` and `activeFilterChips` are `computed()` signals that read from a `WritableSignal` snapshot of the form value, updated synchronously inside the immediate `valueChanges` subscription. This bridges the RxJS `FormGroup` world into Angular's signal graph cleanly without `toSignal()`.
+
+**`FilterPanel` dismissal contract (typed return via `MatBottomSheetRef.dismiss()`):**
+Three distinct outcomes — `PolicyFilterFormValue` object (Apply), `'reset'` string (Reset), `undefined` (backdrop/Escape). The parent handles all three in one `afterDismissed()` subscription. No `@Output`, no shared service, no reference from the overlay back to the parent.
+
+**`provideNativeDateAdapter()` scoped to `FilterPanel`:**
+The native date adapter is provided in `FilterPanel`'s `providers` array, not at root. This keeps the adapter out of the global injector and avoids importing `MatNativeDateModule` globally.
+
+**ISO string date comparison in `filteredPolicies`:**
+`YYYY-MM-DD` ISO strings are lexicographically chronological. Comparing strings directly avoids `new Date()` allocation on every row in the filter predicate — a meaningful optimisation when filtering 250 records on every keystroke.
+
+### Build Result
+`Application bundle generation complete. [2.817 seconds]` — 0 errors, 0 warnings.
+
 <!-- New sessions will be appended below -->

@@ -69,7 +69,10 @@ src/app/
         ├── constants/         Typed const arrays (REGIONS, POLICY_STATUSES, etc.)
         ├── store/             Signal-based state (PolicyStore)
         ├── services/          PolicyApiService
-        ├── components/        Feature components (list, detail, filters, charts)
+        ├── components/
+        │   ├── policy-table/  Paginated, sortable, selectable mat-table
+        │   ├── policy-filter/ Search bar + chip strip + URL/storage sync
+        │   └── filter-panel/  Advanced filters bottom sheet (MatBottomSheet)
         └── policy-dashboard.routes.ts  Feature-level route config
 ```
 
@@ -93,27 +96,47 @@ src/app/
 ```
 PolicyStore (Injectable, providedIn: 'root')
 │
-├── Signals (writeable)
-│   ├── _policies        WritableSignal<Policy[]>
-│   ├── _filter          WritableSignal<PolicyFilter>
-│   ├── _pagination      WritableSignal<PaginationState>
-│   ├── _loading         WritableSignal<boolean>
-│   └── _error           WritableSignal<NormalisedHttpError | null>
+├── Private WritableSignals (state atoms)
+│   ├── _policies            WritableSignal<Policy[]>
+│   ├── _loading             WritableSignal<boolean>
+│   ├── _error               WritableSignal<string | null>
+│   ├── _filters             WritableSignal<PolicyFilter>
+│   ├── _sort                WritableSignal<PolicySort>  (default: expiryDate/asc)
+│   └── _selectedPolicyIds   WritableSignal<string[]>
 │
-└── Computed Signals (derived, read-only)
-    ├── policies         computed(() => _policies())
-    ├── filter           computed(() => _filter())
-    ├── pagination       computed(() => _pagination())
-    ├── isLoading        computed(() => _loading())
-    ├── hasError         computed(() => _error() !== null)
-    └── filteredCount    computed(() => derived from _policies + _filter)
+├── Public ReadonlySignals
+│   ├── policies             _policies.asReadonly()
+│   ├── loading              _loading.asReadonly()
+│   ├── error                _error.asReadonly()
+│   ├── filters              _filters.asReadonly()
+│   ├── sort                 _sort.asReadonly()
+│   └── selectedPolicyIds    _selectedPolicyIds.asReadonly()
+│
+├── Computed Signals (derived, read-only)
+│   ├── filteredPolicies     client-side multi-value filter over _policies
+│   ├── summary              KPI aggregation (active/pending/expired/cancelled/
+│   │                        totalPremium/expiringWithin30Days/gwpByLob)
+│   ├── selectedCount        selectedPolicyIds().length
+│   ├── hasSelection         selectedCount > 0
+│   └── totalPolicies        filteredPolicies().length
+│
+└── Action Methods
+    ├── loadPolicies()        API call → _policies; resets selection + loading
+    ├── updateFilters(patch)  merges patch into _filters, calls loadPolicies()
+    ├── clearFilters()        resets _filters to {}, calls loadPolicies()
+    ├── updateSort(sort)      sets _sort, calls loadPolicies()
+    ├── toggleSelection(id)   adds/removes id from _selectedPolicyIds
+    ├── selectAll(ids[])      sets _selectedPolicyIds to provided ids
+    ├── clearSelection()      empties _selectedPolicyIds
+    ├── flagSelectedPolicies() optimistic flag + forkJoin + rollback on error
+    └── renewPolicy(id)       optimistic status patch + rollback on error
 ```
 
 Why signals over NgRx:
-- 250-line store vs. 800+ lines of actions/reducers/selectors/effects
+- ~300-line store vs. 800+ lines of actions/reducers/selectors/effects
 - No boilerplate, no RxJS streams to manage
 - Native Angular 20 reactivity — no extra dependencies
-- Components bind directly to `store.policies()` in templates
+- Components bind directly to `store.filteredPolicies()` in templates
 
 ---
 
@@ -165,7 +188,31 @@ Initial resolution: stored value → `prefers-color-scheme` media query → ligh
 
 ---
 
-## 7. Security Posture (OWASP Top 10)
+## 7. Component Layer (Prompt 4–5)
+
+```
+PolicyFilter (search bar + chip strip)
+│  ├── form.valueChanges (immediate) → store.updateFilters()
+│  ├── form.valueChanges (debounced 400 ms) → StorageService + router.navigate(replaceUrl)
+│  └── openFilters() → MatBottomSheet.open(FilterPanel)
+│                              │
+│                        FilterPanel (bottom sheet)
+│                        ├── seeded from MAT_BOTTOM_SHEET_DATA
+│                        └── dismiss(value | 'reset' | undefined)
+│
+PolicyTable (mat-table)
+├── dataSource: MatTableDataSource<Policy>
+│   └── data ← effect(() => store.filteredPolicies())
+├── _pageIndex/_pageSize: WritableSignal  ← paginator.page subscription
+├── pageIds: computed(() => filteredPolicies().slice(page))
+├── isAllOnPageSelected / isSomeOnPageSelected: computed()
+├── Sort: matSort.sortChange → store.updateSort()   [server-side only]
+└── output<Policy>() rowClick
+```
+
+---
+
+## 8. Security Posture (OWASP Top 10)
 
 | Risk | Mitigation |
 |---|---|
@@ -175,3 +222,16 @@ Initial resolution: stored value → `prefers-color-scheme` media query → ligh
 | A05 Security Misconfiguration | 5xx server error messages stripped in `errorInterceptor` — never passed to UI |
 | A06 Vulnerable Components | `npm audit` run after every dependency install |
 | A09 Logging Failures | `LoggerService` suppresses debug/info in production; no credentials logged |
+
+---
+
+## 9. Documentation Maintenance Rule
+
+The following files must be updated at the end of **every prompt** (after the build passes):
+
+| File | What to update |
+|---|---|
+| `AI-JOURNAL.md` | Add a new session entry with: what was built, key decisions, build result |
+| `DESIGN_DECISIONS.md` | Add a DD-NNN entry for every non-obvious design choice |
+| `CHANGELOG.md` | Add `Added` / `Changed` / `Fixed` entries under `[Unreleased]` |
+| `ARCHITECTURE.md` | Update any diagram or section that no longer reflects the codebase |
