@@ -20,7 +20,6 @@ import {
 } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { of } from 'rxjs';
 
 import { PolicyTable } from './policy-table';
 import { PolicyStore } from '../../store/policy.store';
