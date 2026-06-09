@@ -31,6 +31,8 @@ module.exports = defineConfig([
           style: "kebab-case",
         },
       ],
+      // Enforce the brief's "no any" rule.
+      "@typescript-eslint/no-explicit-any": "error",
     },
   },
   {

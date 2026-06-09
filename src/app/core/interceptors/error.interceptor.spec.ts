@@ -15,6 +15,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import {
   HttpClient,
+  HttpErrorResponse,
   provideHttpClient,
   withInterceptors,
 } from '@angular/common/http';
@@ -23,7 +24,11 @@ import {
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
 
-import { errorInterceptor, NormalisedHttpError } from './error.interceptor';
+import {
+  errorInterceptor,
+  normaliseHttpError,
+  NormalisedHttpError,
+} from './error.interceptor';
 
 describe('errorInterceptor', () => {
   let http: HttpClient;
@@ -100,5 +105,61 @@ describe('errorInterceptor', () => {
     const req = httpMock.expectOne('/api/policies');
     // Simulate a network error (status 0, no response body)
     req.error(new ProgressEvent('error'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// normaliseHttpError — pure function, one assertion per status branch
+// ---------------------------------------------------------------------------
+
+describe('normaliseHttpError', () => {
+  /** Build an HttpErrorResponse for a given status (+ optional error body). */
+  function errorAt(status: number, error?: unknown): HttpErrorResponse {
+    return new HttpErrorResponse({
+      status,
+      statusText: 'X',
+      url: '/api/policies',
+      error,
+    });
+  }
+
+  it('status 0 → connectivity message', () => {
+    const r = normaliseHttpError(errorAt(0));
+    expect(r.status).toBe(0);
+    expect(r.message).toContain('connect');
+    expect(r.url).toBe('/api/policies');
+    expect(r.timestamp).toBeTruthy();
+  });
+
+  it('status 503 → generic server-error message (no internals leaked)', () => {
+    const r = normaliseHttpError(errorAt(503, { message: 'stack trace here' }));
+    expect(r.message).toContain('server error');
+    expect(r.message).not.toContain('stack trace');
+  });
+
+  it('status 404 → not found', () => {
+    expect(normaliseHttpError(errorAt(404)).message).toContain('not found');
+  });
+
+  it('status 403 → permission denied', () => {
+    expect(normaliseHttpError(errorAt(403)).message).toContain('permission');
+  });
+
+  it('status 401 → session expired', () => {
+    expect(normaliseHttpError(errorAt(401)).message).toContain('session');
+  });
+
+  it('status 400 with a server message → surfaces the server message', () => {
+    const r = normaliseHttpError(errorAt(400, { message: 'Field X is invalid' }));
+    expect(r.message).toBe('Field X is invalid');
+  });
+
+  it('status 400 without a structured message → generic bad-request fallback', () => {
+    const r = normaliseHttpError(errorAt(400, 'plain-string-body'));
+    expect(r.message).toContain('Bad request');
+  });
+
+  it('unhandled 4xx (e.g. 418) → catch-all message with the status', () => {
+    expect(normaliseHttpError(errorAt(418)).message).toContain('418');
   });
 });

@@ -318,3 +318,21 @@ A senior-architect review flagged three things: (1) the "server-side filtering" 
 - `ng build` (browser + SSR): 0 errors. SSR output intact.
 - `ng test`: **155 specs pass, 0 failures, no NG0914 warning.** Updated the api/store/table/summary/dialog/filter specs; added `src/app/features/policy-dashboard/testing/policy-test-utils.ts` (`pageOf`/`summaryOf`) to keep spec setup DRY against the new contract.
 - Manual `curl` smoke test of the Express server confirmed filter + OR-search + sort + pagination + summary responses.
+
+---
+
+## Session — ESLint wired up + branch coverage over 80% (2026-06-09)
+
+### Context
+Final gap pass against the requirement checklist found two concrete misses: `ng lint` could not run (the `angular-eslint`/`eslint`/`typescript-eslint` devDeps were declared but never installed, and there was no flat config), and branch coverage sat at 75.7% (lines were already 91%).
+
+### What I changed
+- **Lint:** ran `npm install` (pulled in `@angular-eslint/builder` + plugins + `@eslint/js`); confirmed the ESLint 9 flat `eslint.config.js`; added `@typescript-eslint/no-explicit-any: error` to enforce the brief's "no any" rule. First run surfaced one real issue — a leftover unused `of` import in `policy-table.spec.ts` (residue from the server-side refactor) — removed it. `npm run lint` → **All files pass**.
+- **Coverage:** the error interceptor was the weak spot (23.5% branches — one branch per HTTP status). Added a `normaliseHttpError` pure-function suite covering status 0 / 5xx / 404 / 403 / 401 / 400-with-server-message / 400-fallback / unhandled-4xx. Branch coverage **75.7% → 80.4%**; statements 92.2%, functions 92.2%, lines 92.9%. Tests **155 → 163**, all passing.
+
+### Decisions
+- **[ACCEPTED] Test the pure `normaliseHttpError` directly** rather than 8 HTTP round-trips — same branch coverage, far less ceremony, faster suite.
+- **[CHALLENGED] "coverage is already fine at 91% lines."** The checklist bar is generic 80%; branches were the laggard, so I targeted branches specifically instead of padding line coverage.
+
+### Verification
+`npm run lint` clean · `ng test` 163 pass, all coverage metrics ≥80% · `ng build` (browser + SSR) 0 errors.
