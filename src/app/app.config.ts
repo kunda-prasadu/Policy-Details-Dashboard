@@ -5,6 +5,7 @@
 
 import {
   ApplicationConfig,
+  LOCALE_ID,
   provideBrowserGlobalErrorListeners,
   provideZonelessChangeDetection,
 } from '@angular/core';
@@ -26,6 +27,9 @@ import { errorInterceptor } from './core/interceptors';
  */
 export const appConfig: ApplicationConfig = {
   providers: [
+    // i18n readiness: explicit locale provider for predictable formatting.
+    { provide: LOCALE_ID, useValue: 'en-US' },
+
     // WHY THIS APPROACH: provideBrowserGlobalErrorListeners registers uncaught
     // error and unhandled rejection handlers at the platform level, giving us
     // a single centralised error boundary before any app-level handler.

@@ -14,7 +14,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient } from '@angular/common/http';
-import { of, throwError } from 'rxjs';
+import { Observable, of, throwError } from 'rxjs';
 
 import { PolicyStore } from './policy.store';
 import { PolicyApiService } from '../services/policy-api.service';
@@ -63,6 +63,7 @@ describe('PolicyStore', () => {
       'flagPolicy',
       'flagPolicies',
     ]);
+    apiSpy.getAll.and.returnValue(of([]));
 
     TestBed.configureTestingModule({
       providers: [
@@ -87,7 +88,6 @@ describe('PolicyStore', () => {
       // we can assert the intermediate loading=true state synchronously before
       // the observable ever emits. No fakeAsync needed — _loading.set(true) runs
       // synchronously inside loadPolicies() before the subscribe callback.
-      const { Observable } = require('rxjs');
       apiSpy.getAll.and.returnValue(
         new Observable<Policy[]>(() => { /* never completes */ }),
       );
@@ -159,13 +159,11 @@ describe('PolicyStore', () => {
       expect(store.selectedPolicyIds()).toEqual([]);
     });
 
-    it('should NOT call loadPolicies() when filters are updated', fakeAsync(() => {
-      // WHY: updateFilters is client-side only; reload only on sort change
+    it('should call loadPolicies() when filters are updated', () => {
       store.updateFilters({ search: 'Acme' });
-      tick();
 
-      expect(apiSpy.getAll).not.toHaveBeenCalled();
-    }));
+      expect(apiSpy.getAll).toHaveBeenCalled();
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -173,7 +171,7 @@ describe('PolicyStore', () => {
   // -------------------------------------------------------------------------
 
   describe('summary computed', () => {
-    beforeEach(fakeAsync(() => {
+    beforeEach(() => {
       const policies: Policy[] = [
         makePolicy({ id: '1', status: 'Active', premiumAmount: 100 }),
         makePolicy({ id: '2', status: 'Active', premiumAmount: 200 }),
@@ -183,8 +181,7 @@ describe('PolicyStore', () => {
       ];
       apiSpy.getAll.and.returnValue(of(policies));
       store.loadPolicies();
-      tick();
-    }));
+    });
 
     it('should correctly count active policies', () => {
       expect(store.summary().active).toBe(2);
@@ -206,7 +203,7 @@ describe('PolicyStore', () => {
       expect(store.summary().totalPremium).toBe(1500);
     });
 
-    it('should count expiringWithin30Days for Active policies only', fakeAsync(() => {
+    it('should count expiringWithin30Days for Active policies only', () => {
       const soon = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
         .toISOString()
         .split('T')[0];
@@ -220,10 +217,9 @@ describe('PolicyStore', () => {
         makePolicy({ id: 'c', status: 'Active', expiryDate: expired }), // past
       ]));
       store.loadPolicies();
-      tick();
 
       expect(store.summary().expiringWithin30Days).toBe(1);
-    }));
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -237,11 +233,10 @@ describe('PolicyStore', () => {
       makePolicy({ id: '3', policyHolderName: 'Gamma Inc', status: 'Active', region: 'Australia' }),
     ];
 
-    beforeEach(fakeAsync(() => {
+    beforeEach(() => {
       apiSpy.getAll.and.returnValue(of(policies));
       store.loadPolicies();
-      tick();
-    }));
+    });
 
     it('should return all policies when no filters are active', () => {
       expect(store.filteredPolicies().length).toBe(3);
@@ -251,6 +246,19 @@ describe('PolicyStore', () => {
       store.updateFilters({ search: 'Acme' });
       expect(store.filteredPolicies().length).toBe(1);
       expect(store.filteredPolicies()[0].id).toBe('1');
+    });
+
+    it('should filter by free-text search on underwriter', () => {
+      const byUnderwriter: Policy[] = [
+        makePolicy({ id: '1', underwriter: 'Alice Tan' }),
+        makePolicy({ id: '2', underwriter: 'Bob Lee' }),
+      ];
+      apiSpy.getAll.and.returnValue(of(byUnderwriter));
+      store.loadPolicies();
+
+      store.updateFilters({ search: 'bob' });
+      expect(store.filteredPolicies().length).toBe(1);
+      expect(store.filteredPolicies()[0].id).toBe('2');
     });
 
     it('should filter by status array', () => {
@@ -265,9 +273,98 @@ describe('PolicyStore', () => {
       expect(store.filteredPolicies()[0].region).toBe('Japan');
     });
 
+    it('should filter by linesOfBusiness and currencies together', () => {
+      const byLobCurrency: Policy[] = [
+        makePolicy({ id: '1', lineOfBusiness: 'Marine', currency: 'USD' }),
+        makePolicy({ id: '2', lineOfBusiness: 'Property', currency: 'SGD' }),
+        makePolicy({ id: '3', lineOfBusiness: 'Marine', currency: 'SGD' }),
+      ];
+      apiSpy.getAll.and.returnValue(of(byLobCurrency));
+      store.loadPolicies();
+
+      store.updateFilters({ linesOfBusiness: ['Marine'], currencies: ['SGD'] });
+
+      expect(store.filteredPolicies().length).toBe(1);
+      expect(store.filteredPolicies()[0].id).toBe('3');
+    });
+
+    it('should filter by flaggedForReview, premium min/max and effective date range', () => {
+      const mixed: Policy[] = [
+        makePolicy({
+          id: 'ok',
+          flaggedForReview: true,
+          premiumAmount: 60000,
+          effectiveDate: '2026-02-01',
+        }),
+        makePolicy({
+          id: 'not-flagged',
+          flaggedForReview: false,
+          premiumAmount: 60000,
+          effectiveDate: '2026-02-01',
+        }),
+        makePolicy({
+          id: 'too-low',
+          flaggedForReview: true,
+          premiumAmount: 1000,
+          effectiveDate: '2026-02-01',
+        }),
+        makePolicy({
+          id: 'too-high',
+          flaggedForReview: true,
+          premiumAmount: 999999,
+          effectiveDate: '2026-02-01',
+        }),
+        makePolicy({
+          id: 'too-early',
+          flaggedForReview: true,
+          premiumAmount: 60000,
+          effectiveDate: '2025-12-01',
+        }),
+        makePolicy({
+          id: 'too-late',
+          flaggedForReview: true,
+          premiumAmount: 60000,
+          effectiveDate: '2026-12-31',
+        }),
+      ];
+      apiSpy.getAll.and.returnValue(of(mixed));
+      store.loadPolicies();
+
+      store.updateFilters({
+        flaggedForReview: true,
+        premiumMin: 50000,
+        premiumMax: 100000,
+        effectiveDateFrom: '2026-01-01',
+        effectiveDateTo: '2026-06-30',
+      });
+
+      expect(store.filteredPolicies().length).toBe(1);
+      expect(store.filteredPolicies()[0].id).toBe('ok');
+    });
+
     it('should return empty array when no matches for search', () => {
       store.updateFilters({ search: 'nonexistent-xyz' });
       expect(store.filteredPolicies().length).toBe(0);
+    });
+
+    it('should filter by expiryDateFrom and expiryDateTo', () => {
+      const dated: Policy[] = [
+        makePolicy({ id: '1', expiryDate: '2026-01-15' }),
+        makePolicy({ id: '2', expiryDate: '2026-03-10' }),
+        makePolicy({ id: '3', expiryDate: '2026-05-20' }),
+      ];
+      apiSpy.getAll.and.returnValue(of(dated));
+      store.loadPolicies();
+
+      store.updateFilters({ expiryDateFrom: '2026-02-01', expiryDateTo: '2026-04-01' });
+
+      expect(store.filteredPolicies().length).toBe(1);
+      expect(store.filteredPolicies()[0].id).toBe('2');
+    });
+
+    it('totalPolicies should reflect filtered list size', () => {
+      store.updateFilters({ statuses: ['Active'] });
+      expect(store.totalPolicies()).toBe(2);
     });
   });
 
@@ -332,7 +429,7 @@ describe('PolicyStore', () => {
   // -------------------------------------------------------------------------
 
   describe('flagSelectedPolicies()', () => {
-    it('should call flagPolicies API with selected IDs', fakeAsync(() => {
+    it('should call flagPolicies API with selected IDs', () => {
       const p1 = makePolicy({ id: 'p1' });
       const p2 = makePolicy({ id: 'p2' });
       apiSpy.getAll.and.returnValue(of([p1, p2]));
@@ -342,65 +439,89 @@ describe('PolicyStore', () => {
       ]));
 
       store.loadPolicies();
-      tick();
       store.selectAll(['p1', 'p2']);
       store.flagSelectedPolicies();
-      tick();
 
       expect(apiSpy.flagPolicies).toHaveBeenCalledWith(['p1', 'p2']);
-    }));
+    });
 
-    it('should clear selection after successful flag', fakeAsync(() => {
+    it('should clear selection after successful flag', () => {
       const p = makePolicy({ id: 'p1' });
       apiSpy.getAll.and.returnValue(of([p]));
       apiSpy.flagPolicies.and.returnValue(of([{ ...p, flaggedForReview: true }]));
 
       store.loadPolicies();
-      tick();
       store.selectAll(['p1']);
       store.flagSelectedPolicies();
-      tick();
 
       expect(store.selectedPolicyIds()).toEqual([]);
-    }));
+    });
 
-    it('should roll back optimistic update on API failure', fakeAsync(() => {
+    it('should roll back optimistic update on API failure', () => {
       const p = makePolicy({ id: 'p1', flaggedForReview: false });
       apiSpy.getAll.and.returnValue(of([p]));
       apiSpy.flagPolicies.and.returnValue(throwError(() => new Error('patch failed')));
 
       store.loadPolicies();
-      tick();
       store.selectAll(['p1']);
       store.flagSelectedPolicies();
-      tick();
 
       // After rollback, the policy should be back to flaggedForReview: false
       const rolled = store.policies().find((x) => x.id === 'p1');
       expect(rolled?.flaggedForReview).toBeFalse();
-    }));
+    });
 
-    it('should set error signal on flag failure', fakeAsync(() => {
+    it('should set error signal on flag failure', () => {
       const p = makePolicy({ id: 'p1' });
       apiSpy.getAll.and.returnValue(of([p]));
       apiSpy.flagPolicies.and.returnValue(throwError(() => ({ message: 'Flag failed' })));
 
       store.loadPolicies();
-      tick();
       store.selectAll(['p1']);
       store.flagSelectedPolicies();
-      tick();
 
       expect(store.error()).toBeTruthy();
-    }));
+    });
 
-    it('should be a no-op when selection is empty', fakeAsync(() => {
+    it('should store failed IDs for explicit retry on flag failure', () => {
+      const p = makePolicy({ id: 'p1' });
+      apiSpy.getAll.and.returnValue(of([p]));
+      apiSpy.flagPolicies.and.returnValue(throwError(() => ({ message: 'Flag failed' })));
+
+      store.loadPolicies();
+      store.selectAll(['p1']);
+      store.flagSelectedPolicies();
+
+      expect(store.lastFailedFlagIds()).toEqual(['p1']);
+    });
+
+    it('retryLastFailedFlag() should no-op when there are no failed IDs', () => {
+      store.retryLastFailedFlag();
+      expect(apiSpy.flagPolicies).not.toHaveBeenCalled();
+    });
+
+    it('retryLastFailedFlag() should re-dispatch flagSelectedPolicies for failed IDs', () => {
+      const p = makePolicy({ id: 'p1' });
+      apiSpy.getAll.and.returnValue(of([p]));
+      apiSpy.flagPolicies.and.returnValue(throwError(() => ({ message: 'Flag failed' })));
+
+      store.loadPolicies();
+      store.selectAll(['p1']);
+      store.flagSelectedPolicies();
+
+      apiSpy.flagPolicies.calls.reset();
+      apiSpy.flagPolicies.and.returnValue(of([{ ...p, flaggedForReview: true }]));
+      store.retryLastFailedFlag();
+
+      expect(apiSpy.flagPolicies).toHaveBeenCalledWith(['p1']);
+    });
+
+    it('should be a no-op when selection is empty', () => {
       store.clearSelection();
       store.flagSelectedPolicies();
-      tick();
 
       expect(apiSpy.flagPolicies).not.toHaveBeenCalled();
-    }));
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -408,59 +529,51 @@ describe('PolicyStore', () => {
   // -------------------------------------------------------------------------
 
   describe('renewPolicy()', () => {
-    it('should call patch API with status Active', fakeAsync(() => {
+    it('should call patch API with status Active', () => {
       const p = makePolicy({ id: 'r1', status: 'Expired' });
       apiSpy.getAll.and.returnValue(of([p]));
       apiSpy.patch.and.returnValue(of({ ...p, status: 'Active' }));
 
       store.loadPolicies();
-      tick();
       store.renewPolicy('r1');
-      tick();
 
       expect(apiSpy.patch).toHaveBeenCalledWith('r1', { status: 'Active' });
-    }));
+    });
 
-    it('should update policy status in store on success', fakeAsync(() => {
+    it('should update policy status in store on success', () => {
       const p = makePolicy({ id: 'r1', status: 'Expired' });
       apiSpy.getAll.and.returnValue(of([p]));
       apiSpy.patch.and.returnValue(of({ ...p, status: 'Active' }));
 
       store.loadPolicies();
-      tick();
       store.renewPolicy('r1');
-      tick();
 
       const updated = store.policies().find((x) => x.id === 'r1');
       expect(updated?.status).toBe('Active');
-    }));
+    });
 
-    it('should roll back status on renew failure', fakeAsync(() => {
+    it('should roll back status on renew failure', () => {
       const p = makePolicy({ id: 'r1', status: 'Expired' });
       apiSpy.getAll.and.returnValue(of([p]));
       apiSpy.patch.and.returnValue(throwError(() => new Error('renew failed')));
 
       store.loadPolicies();
-      tick();
       store.renewPolicy('r1');
-      tick();
 
       const rolled = store.policies().find((x) => x.id === 'r1');
       expect(rolled?.status).toBe('Expired');
-    }));
+    });
 
-    it('should set error signal on renew failure', fakeAsync(() => {
+    it('should set error signal on renew failure', () => {
       const p = makePolicy({ id: 'r1', status: 'Expired' });
       apiSpy.getAll.and.returnValue(of([p]));
       apiSpy.patch.and.returnValue(throwError(() => ({ message: 'Renew failed' })));
 
       store.loadPolicies();
-      tick();
       store.renewPolicy('r1');
-      tick();
 
       expect(store.error()).toBeTruthy();
-    }));
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -483,3 +596,4 @@ describe('PolicyStore', () => {
     });
   });
 });
+

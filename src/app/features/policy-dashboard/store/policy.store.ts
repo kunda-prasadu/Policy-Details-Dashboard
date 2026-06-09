@@ -28,7 +28,6 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { LoggerService } from '../../../core/services/logger.service';
 import { NormalisedHttpError } from '../../../core/interceptors/error.interceptor';
 import { PolicyFilter } from '../models/policy-filter.model';
-import { DEFAULT_PAGINATION } from '../models/pagination.model';
 import { Policy, PolicyStatus } from '../models/policy.model';
 import { PolicyApiService, PolicySort } from '../services/policy-api.service';
 
@@ -102,6 +101,9 @@ export class PolicyStore {
   /** Error message from the last failed operation, or null when healthy. */
   private readonly _error = signal<string | null>(null);
 
+  /** Last failed bulk-flag selection; used to offer explicit retry UX. */
+  private readonly _lastFailedFlagIds = signal<string[]>([]);
+
   /** Active filter criteria applied to the policy list. */
   private readonly _filters = signal<PolicyFilter>({});
 
@@ -135,6 +137,9 @@ export class PolicyStore {
 
   /** Last error message, or null. Consumed by error banner components. */
   readonly error = this._error.asReadonly();
+
+  /** IDs from the most recent failed bulk flag operation. */
+  readonly lastFailedFlagIds = this._lastFailedFlagIds.asReadonly();
 
   /** Currently active filter criteria. */
   readonly filters = this._filters.asReadonly();
@@ -178,7 +183,9 @@ export class PolicyStore {
       f.premiumMin !== undefined ||
       f.premiumMax !== undefined ||
       f.effectiveDateFrom !== undefined ||
-      f.effectiveDateTo !== undefined;
+      f.effectiveDateTo !== undefined ||
+      f.expiryDateFrom !== undefined ||
+      f.expiryDateTo !== undefined;
 
     if (!hasFilters) {
       return all;
@@ -190,7 +197,8 @@ export class PolicyStore {
         const term = f.search.trim().toLowerCase();
         const matchesSearch =
           p.policyNumber.toLowerCase().includes(term) ||
-          p.policyHolderName.toLowerCase().includes(term);
+          p.policyHolderName.toLowerCase().includes(term) ||
+          p.underwriter.toLowerCase().includes(term);
         if (!matchesSearch) return false;
       }
 
@@ -220,6 +228,10 @@ export class PolicyStore {
       // that format, avoiding Date object allocation on every row evaluation.
       if (f.effectiveDateFrom && p.effectiveDate < f.effectiveDateFrom) return false;
       if (f.effectiveDateTo && p.effectiveDate > f.effectiveDateTo) return false;
+
+      // Expiry date range filter
+      if (f.expiryDateFrom && p.expiryDate < f.expiryDateFrom) return false;
+      if (f.expiryDateTo && p.expiryDate > f.expiryDateTo) return false;
 
       return true;
     });
@@ -340,6 +352,7 @@ export class PolicyStore {
         next: (policies) => {
           this._policies.set(policies);
           this._selectedPolicyIds.set([]);
+          this._lastFailedFlagIds.set([]);
           this._loading.set(false);
           this.logger.info(`PolicyStore: loaded ${policies.length} policies`);
         },
@@ -367,13 +380,7 @@ export class PolicyStore {
   updateFilters(patch: Partial<PolicyFilter>): void {
     this._filters.update((current) => ({ ...current, ...patch }));
     this._selectedPolicyIds.set([]);
-    // WHY THIS APPROACH: All 250 policies are already loaded in _policies.
-    // The filteredPolicies computed re-evaluates synchronously on the next signal
-    // read whenever _filters changes — no API reload is needed for filter-only
-    // changes. Calling loadPolicies() here would cause a visible loading-skeleton
-    // flash on every keystroke in the search box and unnecessary API round-trips.
-    // Sort changes still trigger loadPolicies() in updateSort() because json-server
-    // applies sort server-side.
+    this.loadPolicies();
   }
 
   /**
@@ -384,9 +391,7 @@ export class PolicyStore {
   clearFilters(): void {
     this._filters.set({});
     this._selectedPolicyIds.set([]);
-    // WHY NO loadPolicies(): same reasoning as updateFilters() — the full set
-    // is already in memory; clearing filters just removes the predicate so
-    // filteredPolicies returns all _policies entries immediately.
+    this.loadPolicies();
   }
 
   /**
@@ -484,6 +489,7 @@ export class PolicyStore {
 
     this._loading.set(true);
     this._error.set(null);
+    this._lastFailedFlagIds.set([]);
 
     // RxJS pipe:
     // flagPolicies(ids)         — forkJoin of N parallel PATCH requests
@@ -503,6 +509,7 @@ export class PolicyStore {
           );
           this._loading.set(false);
           this.clearSelection();
+          this._lastFailedFlagIds.set([]);
           this.logger.info(
             `PolicyStore: flagged ${selectedIds.length} policies successfully`,
           );
@@ -511,11 +518,24 @@ export class PolicyStore {
           // Rollback to snapshot — the optimistic update is reverted
           this._policies.set(snapshot);
           this._loading.set(false);
+          this._lastFailedFlagIds.set(selectedIds);
           const message = this.extractErrorMessage(err);
           this._error.set(message);
           this.logger.error('PolicyStore.flagSelectedPolicies() failed', err);
         },
       });
+  }
+
+  /**
+   * Retries the last failed bulk-flag operation, if any.
+   */
+  retryLastFailedFlag(): void {
+    const ids = this._lastFailedFlagIds();
+    if (ids.length === 0) {
+      return;
+    }
+    this.selectAll(ids);
+    this.flagSelectedPolicies();
   }
 
   /**

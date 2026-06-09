@@ -35,10 +35,10 @@ describe('ThemeService', () => {
       matches: query === '(prefers-color-scheme: dark)' ? systemPrefersDark : false,
       media: query,
       onchange: null,
-      addListener: () => {},
-      removeListener: () => {},
-      addEventListener: () => {},
-      removeEventListener: () => {},
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
       dispatchEvent: () => false,
     }));
 
@@ -84,6 +84,13 @@ describe('ThemeService', () => {
     expect(storageSpy.set).toHaveBeenCalledWith(THEME_STORAGE_KEY, DARK_THEME_VALUE);
   });
 
+  it('setDark(false) should persist light mode and remove dark state', () => {
+    service = createService(DARK_THEME_VALUE);
+    service.setDark(false);
+    expect(service.isDark()).toBeFalse();
+    expect(storageSpy.set).toHaveBeenCalledWith(THEME_STORAGE_KEY, 'light');
+  });
+
   it('toggle() should apply dark-theme class to document.documentElement', () => {
     service = createService('light');
     service.toggle();
@@ -93,5 +100,23 @@ describe('ThemeService', () => {
     // to run synchronously before the assertion.
     TestBed.flushEffects();
     expect(document.documentElement.classList.contains('dark-theme')).toBeTrue();
+  });
+
+  it('should fall back to light in server platform when no value is stored', () => {
+    TestBed.resetTestingModule();
+    storageSpy = jasmine.createSpyObj<StorageService>('StorageService', ['get', 'set', 'remove']);
+    storageSpy.get.and.returnValue(null);
+
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: PLATFORM_ID, useValue: 'server' },
+        { provide: StorageService, useValue: storageSpy },
+        ThemeService,
+      ],
+    });
+
+    const serverService = TestBed.inject(ThemeService);
+    expect(serverService.isDark()).toBeFalse();
   });
 });

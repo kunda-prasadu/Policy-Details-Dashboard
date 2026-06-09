@@ -35,6 +35,8 @@ const EMPTY_DATA: PolicyFilterFormValue = {
   lineOfBusiness: null,
   startDate: null,
   endDate: null,
+  expiryStartDate: null,
+  expiryEndDate: null,
   minPremium: 0,
 };
 
@@ -43,8 +45,10 @@ const SEEDED_DATA: PolicyFilterFormValue = {
   status: 'Active',
   region: 'Japan',
   lineOfBusiness: 'Marine',
-  startDate: null,
-  endDate: null,
+  startDate: '2026-01-01',
+  endDate: '2026-03-01',
+  expiryStartDate: '2026-04-01',
+  expiryEndDate: '2026-06-01',
   minPremium: 50_000,
 };
 
@@ -108,6 +112,12 @@ describe('FilterPanel', () => {
   it('form should be seeded with minPremium from injected data', async () => {
     await buildFixture(SEEDED_DATA);
     expect(component.form.get('minPremium')?.value).toBe(50_000);
+  });
+
+  it('form should be seeded with expiry date range from injected data', async () => {
+    await buildFixture(SEEDED_DATA);
+    expect(component.form.get('expiryStartDate')?.value).toBe('2026-04-01');
+    expect(component.form.get('expiryEndDate')?.value).toBe('2026-06-01');
   });
 
   it('form fields should be null/0 when empty data is injected', async () => {

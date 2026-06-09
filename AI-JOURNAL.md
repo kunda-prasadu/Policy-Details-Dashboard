@@ -19,8 +19,8 @@ This journal logs every AI-assisted development session: the prompts used, decis
 | Rendering | SSR (`@angular/ssr`) |
 | Styling | SCSS (component-scoped) |
 | Package Manager | npm |
-| Unit Tests | Vitest |
-| E2E Tests | Playwright |
+| Unit Tests | Jasmine + Karma |
+| E2E Tests | Not configured |
 | API | Mock JSON / in-memory (REST-ready) |
 
 ### Global Code Rules Agreed

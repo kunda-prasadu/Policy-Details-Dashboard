@@ -88,6 +88,38 @@
 
     </div>
 
+    <!-- Expiry date range -->
+    <div class="date-range-row">
+
+      <mat-form-field appearance="outline" class="field-half">
+        <mat-label>Expiry from</mat-label>
+        <input
+          matInput
+          [matDatepicker]="expiryStartPicker"
+          formControlName="expiryStartDate"
+          aria-label="Expiry date from"
+          readonly
+        />
+        <mat-datepicker-toggle matIconSuffix [for]="expiryStartPicker" />
+        <mat-datepicker #expiryStartPicker />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="field-half">
+        <mat-label>Expiry to</mat-label>
+        <input
+          matInput
+          [matDatepicker]="expiryEndPicker"
+          formControlName="expiryEndDate"
+          aria-label="Expiry date to"
+          [min]="form.get('expiryStartDate')?.value"
+          readonly
+        />
+        <mat-datepicker-toggle matIconSuffix [for]="expiryEndPicker" />
+        <mat-datepicker #expiryEndPicker />
+      </mat-form-field>
+
+    </div>
+
     <!-- Minimum premium -->
     <!--
       WHY NUMBER INPUT NOT SLIDER: A slider is intuitive for bounded numeric ranges

@@ -60,4 +60,41 @@ describe('StorageService', () => {
     expect(() => service.get<unknown>('bad-json')).not.toThrow();
     expect(service.get<unknown>('bad-json')).toBeNull();
   });
+
+  it('set() should swallow localStorage.setItem errors', () => {
+    const setSpy = spyOn(localStorage, 'setItem').and.throwError('quota');
+
+    expect(() => service.set('quota-key', { a: 1 })).not.toThrow();
+    expect(setSpy).toHaveBeenCalled();
+  });
+
+  it('remove() should swallow localStorage.removeItem errors', () => {
+    const removeSpy = spyOn(localStorage, 'removeItem').and.throwError('security');
+
+    expect(() => service.remove('locked-key')).not.toThrow();
+    expect(removeSpy).toHaveBeenCalled();
+  });
+
+  it('should be a no-op in server platform for get/set/remove', () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        StorageService,
+        { provide: PLATFORM_ID, useValue: 'server' },
+      ],
+    });
+
+    const serverService = TestBed.inject(StorageService);
+    const getSpy = spyOn(localStorage, 'getItem').and.callThrough();
+    const setSpy = spyOn(localStorage, 'setItem').and.callThrough();
+    const removeSpy = spyOn(localStorage, 'removeItem').and.callThrough();
+
+    expect(serverService.get('x')).toBeNull();
+    expect(() => serverService.set('x', 1)).not.toThrow();
+    expect(() => serverService.remove('x')).not.toThrow();
+    expect(getSpy).not.toHaveBeenCalled();
+    expect(setSpy).not.toHaveBeenCalled();
+    expect(removeSpy).not.toHaveBeenCalled();
+  });
 });

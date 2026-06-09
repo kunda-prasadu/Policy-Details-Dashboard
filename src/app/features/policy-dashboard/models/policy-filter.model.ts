@@ -19,8 +19,8 @@ import { Currency, LineOfBusiness, PolicyStatus, Region } from './policy.model';
  */
 export interface PolicyFilter {
   /**
-   * Free-text search applied against policyNumber and policyHolderName fields.
-   * Case-insensitive substring match on the server; passed as a query param.
+   * Free-text search applied against policyNumber, policyHolderName,
+   * and underwriter fields.
    */
   search?: string;
 
@@ -81,4 +81,16 @@ export interface PolicyFilter {
    * `effectiveDate` is on or before this date.
    */
   effectiveDateTo?: string;
+
+  /**
+   * ISO 8601 date string (YYYY-MM-DD). Returns only policies whose
+   * `expiryDate` is on or after this date.
+   */
+  expiryDateFrom?: string;
+
+  /**
+   * ISO 8601 date string (YYYY-MM-DD). Returns only policies whose
+   * `expiryDate` is on or before this date.
+   */
+  expiryDateTo?: string;
 }

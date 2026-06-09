@@ -14,6 +14,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { take } from 'rxjs/operators';
 
 import { PolicyStore } from '../../store/policy.store';
 
@@ -78,10 +79,28 @@ export class BulkActionBar {
 
     this.store.flagSelectedPolicies();
 
+    const failedIds = this.store.lastFailedFlagIds();
+    if (failedIds.length > 0) {
+      const retryRef = this.snackBar.open(
+        `Flag for review failed for ${failedIds.length} ${failedIds.length === 1 ? 'policy' : 'policies'}`,
+        'Retry',
+        {
+          duration: 8000,
+          panelClass: ['snack-flag-error'],
+          horizontalPosition: 'end',
+          verticalPosition: 'bottom',
+        },
+      );
+
+      retryRef.onAction().pipe(take(1)).subscribe(() => {
+        this.store.retryLastFailedFlag();
+      });
+      return;
+    }
+
     // WHY PLURAL HANDLING: "1 policy flagged" vs "2 policies flagged" — grammatically
     // correct messages reduce cognitive friction for users auditing the action log.
     const label = count === 1 ? '1 policy flagged for review' : `${count} policies flagged for review`;
-
     this.snackBar.open(label, 'Dismiss', {
       duration: 4000,
       // WHY CUSTOM panelClass: The success snackbar needs a distinct visual

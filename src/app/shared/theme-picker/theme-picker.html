@@ -25,7 +25,6 @@
     class="palette-grid"
     role="group"
     aria-label="Colour palette options"
-    (click)="$event.stopPropagation()"
   >
     @for (palette of palettes; track palette.id) {
       <button
