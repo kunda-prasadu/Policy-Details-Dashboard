@@ -114,3 +114,13 @@ export const DARK_THEME_VALUE = 'dark' as const;
  * settings panel (read).
  */
 export const PAGE_SIZE_STORAGE_KEY = 'policy-hub-page-size' as const;
+
+/**
+ * LocalStorage key used by PolicyFilter to persist the user's active filter
+ * state across sessions.
+ *
+ * WHY PERSIST FILTERS: Underwriters typically work within a fixed filter context
+ * (e.g. always viewing Singapore / Active policies). Restoring filters on page
+ * reload removes the need to reapply them every session.
+ */
+export const FILTER_STORAGE_KEY = 'policy-hub-filters' as const;

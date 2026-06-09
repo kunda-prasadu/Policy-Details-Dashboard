@@ -157,3 +157,75 @@ This document records every significant architectural and technical decision mad
 - MSW (Mock Service Worker)
 
 **Reason:** `json-server` is a real HTTP server — it exercises the full network stack, CORS handling, and HTTP status codes that the app will encounter with the real backend. `in-memory-web-api` bypasses the network entirely, hiding real HTTP concerns. MSW is more powerful but adds configuration complexity for a project at this stage. `json-server` also supports the `X-Total-Count` header needed for server-side pagination out of the box.
+
+---
+
+## DD-014 · `_pageIndex` / `_pageSize` as Signals in `PolicyTable`
+
+**Decision:** Pagination state is tracked in two `WritableSignal<number>` values (`_pageIndex`, `_pageSize`) rather than reading `MatTableDataSource.filteredData` or `dataSource.paginator.pageIndex` directly inside computed signals.
+
+**Alternatives Considered:**
+- Reading `dataSource.filteredData.length` in a `computed()` to derive the current page slice
+- Reading `dataSource.paginator?.pageIndex` directly in `isAllOnPageSelected`
+
+**Reason:** `MatTableDataSource` updates `filteredData` asynchronously via its internal RxJS pipeline. Reading it synchronously inside a `computed()` or `effect()` returns stale (often empty) data. `isAllOnPageSelected` would always evaluate to `false` because `pageIds` would slice an empty array. Tracking page state in signals that are updated synchronously in the `paginator.page` subscription — and deriving `pageIds` from `store.filteredPolicies()` (a synchronous signal) — fixes this category of bug entirely.
+
+---
+
+## DD-015 · Server-Side Sort in `PolicyTable` (No `dataSource.sort` Assignment)
+
+**Decision:** `MatSort` events are forwarded to `store.updateSort()` instead of assigning `matSort` to `dataSource.sort`.
+
+**Alternatives Considered:**
+- `dataSource.sort = this.sortRef()!` — standard client-side sort approach
+
+**Reason:** Assigning `dataSource.sort` causes `MatTableDataSource` to sort the local data array client-side. For a dashboard that calls the API on every sort change (to maintain consistent server-driven ordering), this would produce a double-sort: the API returns data sorted by the new field, and `MatTableDataSource` re-sorts the same data locally, potentially producing a different order if the sort fields contain equal values. Server-only sort (via `store.updateSort()`) ensures a single, deterministic sort source.
+
+---
+
+## DD-016 · Two `formValueChanges` Subscriptions in `PolicyFilter`
+
+**Decision:** `PolicyFilter` subscribes to `form.valueChanges` twice: once with no debounce (immediate store update) and once with `debounceTime(400)` (localStorage + URL sync).
+
+**Alternatives Considered:**
+- Single subscription that debounces all three side-effects together
+- `switchMap` with conditional delay based on which control changed
+
+**Reason:** Store updates must be immediate for responsive table filtering — the data is local (`json-server` or in-memory), so there is no network cost to updating on every keystroke. URL and localStorage writes are debounced to: (a) prevent the browser history stack from gaining one entry per character typed, and (b) reduce localStorage I/O from O(keystrokes) to O(typing pauses). The two-subscription pattern is explicit and easier to audit than a single stream with conditional delays.
+
+---
+
+## DD-017 · `FilterPanel` Dismissal Contract via `MatBottomSheetRef`
+
+**Decision:** `FilterPanel` communicates results back to `PolicyFilter` by calling `MatBottomSheetRef.dismiss(value)` with three distinct typed values: `PolicyFilterFormValue` (Apply), `'reset'` (Reset), `undefined` (backdrop/Escape).
+
+**Alternatives Considered:**
+- `@Output() EventEmitter` on `FilterPanel` — does not work across the CDK Overlay boundary
+- Shared filter service with a `BehaviorSubject` for bidirectional communication
+- Callback function passed via `MAT_BOTTOM_SHEET_DATA`
+
+**Reason:** `MatBottomSheetRef.dismiss(value)` is the idiomatic Angular Material pattern for returning data from an overlay. It keeps `FilterPanel` fully decoupled from `PolicyFilter` — no direct reference, no shared service, no event emitter. The parent handles all outcomes in one `afterDismissed()` subscription. The `'reset'` string sentinel is unambiguous (`undefined` already means "dismissed without action", `null` is ambiguous in TypeScript).
+
+---
+
+## DD-018 · `provideNativeDateAdapter()` Scoped to `FilterPanel`
+
+**Decision:** The native date adapter is declared in `FilterPanel`'s `providers` array, not imported globally via `MatNativeDateModule`.
+
+**Alternatives Considered:**
+- `import MatNativeDateModule` in the root `AppModule` or `app.config.ts`
+- Using a third-party date adapter (Luxon, date-fns)
+
+**Reason:** Scoping the adapter to the `FilterPanel` component's injector means the date adapter is only initialised when the bottom sheet opens — not at app startup. In an SSR context, the native `Date` adapter works without polyfills on both browser and Node.js. Third-party adapters add bundle weight not justified by the simple "pick a date" use case here.
+
+---
+
+## DD-019 · `effectiveDateFrom` / `effectiveDateTo` as ISO 8601 Strings in `PolicyFilter`
+
+**Decision:** Date range filter values in `PolicyFilter` are `string` (ISO `YYYY-MM-DD` format), not `Date` objects.
+
+**Alternatives Considered:**
+- `Date` objects in `PolicyFilter`
+- Unix timestamp numbers
+
+**Reason:** `PolicyFilter` is serialised to both `localStorage` (via `JSON.stringify`) and URL query params. `Date` objects do not survive `JSON.stringify` round-trips (they become ISO strings with time components, then fail `new Date()` parsing on deserialisation). `YYYY-MM-DD` ISO strings are naturally sortable lexicographically, making the filter predicate in `filteredPolicies` a simple string comparison — no `Date` object allocation per row per filter evaluation.

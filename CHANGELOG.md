@@ -19,12 +19,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mock-api/db.json` — seeded mock database for `json-server`
 - `package.json` scripts: `start:api`, `generate:mock`
 - Domain models: `Policy`, `PolicyFilter`, `PaginationState`, `PolicySummary`, `PolicyQueryParams`
-- Constants: `POLICY_STATUSES`, `REGIONS`, `LINES_OF_BUSINESS`, `CURRENCIES`, `PAGE_SIZE_OPTIONS`, `THEME_STORAGE_KEY`
+- Constants: `POLICY_STATUSES`, `REGIONS`, `LINES_OF_BUSINESS`, `CURRENCIES`, `PAGE_SIZE_OPTIONS`, `THEME_STORAGE_KEY`, `PAGE_SIZE_STORAGE_KEY`, `FILTER_STORAGE_KEY`
 - `StorageService` — SSR-safe generic localStorage wrapper
 - `ThemeService` — signal-based dark/light mode with localStorage persistence and `prefers-color-scheme` fallback
 - `LoggerService` — production-suppressed structured logger
 - `errorInterceptor` — functional HTTP interceptor normalising all errors to `NormalisedHttpError`
-- Documentation: `ARCHITECTURE.md`, `DESIGN_DECISIONS.md`, `AI-JOURNAL.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`
+- `PolicyApiService` — `getAll()`, `patch()`, `flagPolicy()`, `flagPolicies()` with server-side filter params
+- `PolicyStore` — signal-based state store: `filteredPolicies`, `summary`, `selectedCount`, `hasSelection`, all CRUD actions, optimistic flag + rollback
+- `PolicyTable` component — paginated, sortable, selectable 9-column `mat-table`; server-side sort; `_pageIndex`/`_pageSize` signals for reliable checkbox state; `formatPremium` compact K/M formatter; status and LOB colour badges; `.is-selected` row highlight; `.is-flagged` accent border
+- `PolicyFilter` component — search input, "All Filters" badge button, active chip strip; two-subscription `formValueChanges` (immediate store + debounced 400 ms URL/storage); URL ↔ localStorage ↔ defaults seed priority
+- `FilterPanel` bottom-sheet component — Status / Region / LOB selects; date range pickers; min premium input; typed dismissal contract (Apply → form value, Reset → `'reset'`, backdrop → `undefined`)
+- `PolicyFilter` model extended with `effectiveDateFrom?: string` and `effectiveDateTo?: string`
+- `PolicyStore.filteredPolicies` extended with ISO date-string range predicate
+- Documentation: `ARCHITECTURE.md`, `DESIGN_DECISIONS.md` (DD-001–DD-019), `AI-JOURNAL.md` (Sessions 001–005), `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`
 - GitHub templates: PR template, bug report, feature request
 
 ### Fixed
