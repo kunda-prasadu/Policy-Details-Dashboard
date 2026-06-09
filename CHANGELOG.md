@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FilterPanel` bottom-sheet component — Status / Region / LOB selects; date range pickers; min premium input; typed dismissal contract (Apply → form value, Reset → `'reset'`, backdrop → `undefined`)
 - `PolicyFilter` model extended with `effectiveDateFrom?: string` and `effectiveDateTo?: string`
 - `PolicyStore.filteredPolicies` extended with ISO date-string range predicate
+- `SummaryPanel` component — 4 clickable status cards (open drilldown dialog); SVG arc (% Active expiring ≤30d, CSS `stroke-dashoffset` animation); GWP progress bars per LOB with animated width transition
+- `BulkActionBar` component — `role="toolbar"`, `aria-live` selection count, Clear + Flag buttons; MatSnackBar success confirmation with `snack-flag-success` panel class
+- `PolicyDrilldownDialog` component — `DrilldownDialogData` type; detail mode (9-field dl grid, status/flag/lob/days badges, Renew + Flag actions); list mode (filtered mat-table, urgency row tinting, per-row Renew); `renewingIds = signal<Set<string>>()`; `cdkFocusInitial` on close button; `aria-labelledby` dialog title
+- `styles.scss` — `.snack-flag-success` global snackbar override (green background)
 - Documentation: `ARCHITECTURE.md`, `DESIGN_DECISIONS.md` (DD-001–DD-019), `AI-JOURNAL.md` (Sessions 001–005), `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`
 - GitHub templates: PR template, bug report, feature request
 

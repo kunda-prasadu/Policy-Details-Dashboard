@@ -174,4 +174,50 @@ The native date adapter is provided in `FilterPanel`'s `providers` array, not at
 ### Build Result
 `Application bundle generation complete. [2.817 seconds]` — 0 errors, 0 warnings.
 
+---
+
+## Session 006 — 2026-06-09 · Prompt 6: SummaryPanel, BulkActionBar, PolicyDrilldownDialog
+
+### What was built
+
+**`src/app/features/policy-dashboard/components/summary-panel/`**
+- `summary-panel.ts` — `SummaryPanel` standalone component; 4 computed status cards; SVG arc for expiry urgency; GWP progress bars per LOB
+- `summary-panel.html` — `role="grid"` status card buttons + SVG arc widget + GWP bar grid
+- `summary-panel.scss` — CSS custom property tokens per status variant; `stroke-dashoffset` animation (600ms); `width` transition for GWP bars (800ms); dark mode overrides
+
+**`src/app/features/policy-dashboard/components/bulk-action-bar/`**
+- `bulk-action-bar.ts` — `BulkActionBar` component; `flagForReview()` snapshots count before store action; MatSnackBar with `panelClass: ['snack-flag-success']`
+- `bulk-action-bar.html` — `role="toolbar"`; `aria-live="polite"` `aria-atomic="true"` selection count; Clear + Flag buttons
+- `bulk-action-bar.scss` — floating pill surface; `.snack-flag-success` documented (rule lives in `styles.scss`)
+
+**`src/app/features/policy-dashboard/components/policy-drilldown-dialog/`**
+- `policy-drilldown-dialog.ts` — `PolicyDrilldownDialog`; `DrilldownDialogData` type exported; `renewingIds = signal<Set<string>>(new Set())`; `detailPolicy` computed from `store.policies()`; `listPolicies` computed from `store.filteredPolicies()`; `renew()` + `flagDetail()` actions; `daysUntilExpiry` / `urgencyClass` / `daysLabel` helpers
+- `policy-drilldown-dialog.html` — `aria-labelledby="drilldown-dialog-title"`; `cdkFocusInitial` on close button; `@if (data.mode === 'detail')` detail card with 9-field `<dl>` grid, status-pill, flag-pill, days-badge, lob-chip, Renew + Flag actions; `@if (data.mode !== 'detail')` mat-table with urgency badges and row tinting
+- `policy-drilldown-dialog.scss` — status/LOB/urgency/flag CSS custom property tokens; `.urgency-row--critical/high/low` row tinting; dark mode overrides
+
+**`src/styles.scss`** — added `.snack-flag-success` global snackbar override (green background, white text)
+
+### Key Decisions
+
+**`renewingIds = signal<Set<string>>(new Set())`:**
+Renewing spinner state is purely presentational — ephemeral 1500ms UI feedback. Putting it in the store would pollute global domain state. A local signal Set allows multiple rows to be in renewing state simultaneously and provides O(1) `.has()` lookup for template bindings.
+
+**Snapshot `selectedCount()` before `flagSelectedPolicies()`:**
+`store.flagSelectedPolicies()` calls `clearSelection()` internally after the optimistic update. Reading `selectedCount()` after the dispatch gives 0. Snapshotting before ensures the snackbar message accurately reflects how many policies were actioned.
+
+**SVG `stroke-dashoffset` with CSS `transition: 600ms ease-in-out`:**
+No external chart library needed. The arc fills/empties smoothly on filter context changes (e.g. filtering to a region). `rotate(-90 60 60)` shifts the stroke start to 12-o'clock.
+
+**`detailPolicy` derived from `store.policies()` (not `data.policy` snapshot):**
+After `store.renewPolicy(id)` optimistically updates `_policies`, the dialog's computed picks up the new status immediately — the user sees "Active" without reopening the dialog.
+
+**`cdkFocusInitial` on close button:**
+Angular CDK's FocusTrap automatically manages focus within the dialog. `cdkFocusInitial` on the Close button ensures keyboard users land on a predictable, immediately actionable control rather than the first focusable table cell.
+
+**`aria-labelledby` → `id="drilldown-dialog-title"`:**
+Links the dialog container's accessible name to the visible title element. Screen readers announce "Status Policies — dialog" rather than just "dialog".
+
+### Build Result
+`Application bundle generation complete. [2.868 seconds]` — 0 errors, 0 warnings.
+
 <!-- New sessions will be appended below -->

@@ -203,3 +203,18 @@ select {
   border:     0;
 }
 
+// ---------------------------------------------------------------------------
+// Snackbar panel-class overrides
+// MatSnackBar renders in a CDK overlay — these cannot be component-scoped.
+// ---------------------------------------------------------------------------
+
+// Success snackbar for bulk "Flag for Review" confirmation (BulkActionBar)
+.snack-flag-success .mdc-snackbar__surface {
+  background-color: #2e7d32 !important;
+  color: #fff !important;
+}
+
+.snack-flag-success .mat-mdc-button {
+  color: #a5d6a7 !important;
+}
+
