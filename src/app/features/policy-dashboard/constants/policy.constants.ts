@@ -104,3 +104,13 @@ export const THEME_STORAGE_KEY = 'policy-hub-theme' as const;
  * The absence of this value (or any other value) defaults to light mode.
  */
 export const DARK_THEME_VALUE = 'dark' as const;
+
+/**
+ * LocalStorage key used by PolicyTableComponent to persist the user's
+ * preferred page size across sessions.
+ *
+ * WHY A CONSTANT: Same reason as THEME_STORAGE_KEY — a single source of truth
+ * prevents key name drift between the component (write) and any future
+ * settings panel (read).
+ */
+export const PAGE_SIZE_STORAGE_KEY = 'policy-hub-page-size' as const;
