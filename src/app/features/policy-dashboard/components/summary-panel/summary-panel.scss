@@ -68,6 +68,21 @@
 }
 
 // ---------------------------------------------------------------------------
+// 1a. Section headings (Policy Status / Key Metrics)
+// ---------------------------------------------------------------------------
+
+.section-heading {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mat-sys-on-surface-variant);
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+}
+
+// ---------------------------------------------------------------------------
 // 2. Status cards grid
 // ---------------------------------------------------------------------------
 

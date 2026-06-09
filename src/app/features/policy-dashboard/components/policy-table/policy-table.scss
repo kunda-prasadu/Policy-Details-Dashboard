@@ -91,69 +91,79 @@
 
 .policy-table {
   width: 100%;
-  min-width: 900px; // Prevent columns from being too narrow before scrolling kicks in
-
-  // WHY FIXED TABLE LAYOUT: Prevents column width reflow on every data update.
-  // Column widths are set once via the CSS below and remain stable as rows
-  // load, preventing the jarring layout shifts that occur with auto layout.
-  table-layout: fixed;
+  min-width: 700px;
 }
 
 // ---------------------------------------------------------------------------
 // 4. Column widths
 // ---------------------------------------------------------------------------
 
-// Utility: target a column's header and data cells in one rule
-@mixin col-width($def, $width) {
-  .mat-column-#{$def} {
-    width: $width;
-    min-width: $width;
+// WHY ::ng-deep: Angular Material adds .mat-column-* classes to table cells
+// via CdkColumnDef host bindings at runtime. Emulated view encapsulation
+// scopes plain selectors to [_ngcontent-xxx] — these dynamic classes may not
+// carry that attribute, so widths silently fail. ::ng-deep pierces the
+// encapsulation boundary to guarantee the rules are applied.
+// DECISION: :host ::ng-deep over global styles — keeps column widths
+// co-located with the component while still reaching Material internals.
+// ALTERNATIVES CONSIDERED: ViewEncapsulation.None (leaks styles globally),
+//   global styles.scss (separates column widths from the component).
+:host ::ng-deep {
+  // WHY flex rows: mat-table uses display:block so table-layout and colgroup
+  // have no effect. display:flex on rows with flex:1 on cells is the only
+  // reliable way to distribute columns equally across the full table width.
+  tr.mat-mdc-header-row,
+  tr.mat-mdc-row {
+    display: flex;
+    width: 100%;
+    align-items: center;
   }
-}
 
-@include col-width(select, 48px);
-@include col-width(policyNumber, 120px);
-@include col-width(policyHolderName, 200px);
-@include col-width(lineOfBusiness, 148px);
-@include col-width(status, 108px);
-@include col-width(region, 140px);
-@include col-width(premium, 112px);
-@include col-width(flagged, 68px);
-@include col-width(actions, 56px);
+  // All content cells get equal share of remaining width
+  th.mat-mdc-header-cell,
+  td.mat-mdc-cell {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    // WHY border-bottom none: With display:flex on tr, each td/th gets its own
+    // border-bottom which renders as per-cell horizontal lines. Moving the
+    // separator to the tr itself ensures a single clean line per row.
+    border-bottom: none !important;
+  }
+
+  // Row separator on the TR — replaces per-cell borders removed above
+  tr.mat-mdc-row {
+    border-bottom: 1px solid var(--mat-sys-outline-variant);
+  }
+
+  // Fixed-size icon/checkbox columns — specificity matches the flex:1 rule above
+  th.mat-column-select,  td.mat-column-select  { flex: 0 0 52px; overflow: hidden; }
+  th.mat-column-flagged, td.mat-column-flagged { flex: 0 0 56px; text-align: left; padding-inline: 8px; }
+  // WHY box-shadow none: stickyEnd adds a left shadow border that renders as
+  // visual "---" artifact in the header cell. Removing it keeps the header clean.
+  th.mat-column-actions, td.mat-column-actions { flex: 0 0 56px; text-align: center; padding-inline: 4px; box-shadow: none !important; }
+
+  // Premium: left-aligned header + data
+  td.mat-column-premium {
+    text-align: left;
+    font-variant-numeric: tabular-nums;
+    font-family: 'Roboto Mono', 'Courier New', monospace;
+    font-size: 0.85rem;
+  }
+  th.mat-column-premium { text-align: left; }
+  // WHY !important: mat-sort-header renders a flex button inside the th; without
+  // overriding its justify-content the sort container drifts to the right edge.
+  th.mat-column-premium .mat-sort-header-container { justify-content: flex-start !important; }
+  th.mat-column-premium .mat-sort-header-content   { text-align: left !important; }
+
+  // Prevent header label wrapping inside flex cell
+  .mat-sort-header-content { white-space: nowrap; }
+}
 
 // ---------------------------------------------------------------------------
 // 5. Column-specific cell styles
 // ---------------------------------------------------------------------------
 
-.col-select {
-  padding-inline: 8px !important;
-}
 
-.col-holder-name {
-  // Allow name to truncate gracefully on narrow viewports
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-// Right-align the premium column (numeric data convention)
-.col-premium {
-  text-align: right !important;
-  font-variant-numeric: tabular-nums; // Align decimal points across rows
-  font-family: 'Roboto Mono', 'Courier New', monospace;
-  font-size: 0.85rem;
-}
-
-.col-flagged {
-  text-align: center !important;
-  padding-inline: 4px !important;
-}
-
-.col-actions {
-  padding-inline: 4px !important;
-  text-align: center !important;
-}
 
 // ---------------------------------------------------------------------------
 // 6. Policy number

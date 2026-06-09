@@ -126,13 +126,24 @@
 }
 
 // ---------------------------------------------------------------------------
-// 4. 2-column detail grid
+// 4. 4-column detail grid  (label | value | label | value)
 // ---------------------------------------------------------------------------
+// WHY 4-column: The dialog is up to 960px wide. A single label–value pair
+// per row leaves ~half the dialog empty. Pairing fields side by side (e.g.
+// "Policy #" / "POL-000249" on the left, "Policyholder" / "Mrs. X" on the
+// right) uses full dialog width and reduces scroll depth by ~50%.
+// DECISION: CSS Grid auto-placement with grid-template-columns: 160px 1fr 160px 1fr
+// ALTERNATIVES CONSIDERED: Manual column wrapper divs — requires HTML changes
+//   and breaks semantics of a flat <dl>. Pure grid with auto-placement is
+//   clean and requires zero HTML changes.
+// REASON: dt–dd pairs flow naturally: dt lands on col1 (or col3), dd on col2
+//   (or col4). The 9th pair (Underwriter) fills col1–col2, col3–col4 stays
+//   empty — which is visually balanced.
 
 .detail-grid {
   display: grid;
-  grid-template-columns: 140px 1fr;
-  gap: 8px 16px;
+  grid-template-columns: 160px 1fr 160px 1fr;
+  gap: 10px 24px;
   margin: 0;
 
   dt {
@@ -153,6 +164,13 @@
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
+  }
+
+  // WHY last-pair span: 9 fields produce an odd pair; the final Underwriter
+  // dd would otherwise leave two empty grid cells on the right. Spanning it
+  // across col2–col4 fills the row and prevents the visual imbalance.
+  dd:last-child {
+    grid-column: 2 / span 3;
   }
 }
 
@@ -248,7 +266,37 @@
 
 .drilldown-table {
   width: 100%;
-  min-width: 560px;
+  // WHY table-layout: fixed: With 'auto' layout the browser sizes each column
+  // from content/CSS widths independently — the greedy width:100% trick only
+  // dumps all leftover space into one column, leaving others narrow.
+  // 'fixed' layout ignores content widths and distributes space according to
+  // the declared percentage widths, giving every column a proportional share.
+  table-layout: fixed;
+  min-width: 600px;
+}
+
+// WHY ::ng-deep: Same reasoning as PolicyTable — Angular Material adds
+// .mat-column-* classes dynamically; ::ng-deep ensures rules apply.
+:host ::ng-deep {
+  // WHY percentages: table-layout:fixed + percentage widths is the standard
+  // CSS technique for even-distribution across all columns in a data table.
+  // Total = 18+24+16+14+20+8 = 100%
+  .mat-column-policyNumber     { width: 18%; }
+  .mat-column-policyHolderName { width: 24%; }
+  .mat-column-status           { width: 16%; }
+  .mat-column-region           { width: 14%; }
+  .mat-column-expiryDate       { width: 20%; }
+  .mat-column-actions          { width: 8%;  text-align: center; padding-inline: 4px; }
+
+  // Vertical-align and no-wrap matching the main PolicyTable treatment
+  th.mat-mdc-header-cell,
+  td.mat-mdc-cell {
+    vertical-align: middle;
+  }
+
+  .mat-sort-header-content {
+    white-space: nowrap;
+  }
 }
 
 // Row tinting by urgency — applied as a class on the mat-row element

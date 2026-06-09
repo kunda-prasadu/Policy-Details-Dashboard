@@ -82,14 +82,19 @@ export class PolicyApiService {
     // WHY THIS APPROACH: HttpParams is immutable — each .set()/.append() returns
     // a new instance. Building via a chain avoids mutating a shared params object
     // across concurrent calls.
-    let params = new HttpParams().set('_limit', '250');
+    //
+    // WHY _per_page NOT _limit: json-server v1 beta (^1.0.0-beta.x) changed the
+    // pagination API. `_limit` was silently ignored (returns empty array), replaced
+    // by `_per_page`. Using 250 fetches all records in a single round-trip so the
+    // store can paginate and filter in memory via computed signals.
+    let params = new HttpParams().set('_per_page', '250');
 
     if (filters) {
-      // Free-text search: json-server's `q` param does a full-text match
-      // across ALL string fields — covers policyNumber and policyHolderName.
-      if (filters.search?.trim()) {
-        params = params.set('q', filters.search.trim());
-      }
+      // WHY NO `q=` PARAM: json-server v1 beta (^1.0.0-beta.x) does not support
+      // the `q` full-text search parameter — it silently returns 0 results.
+      // Free-text search (policyNumber / policyHolderName) is handled entirely
+      // client-side by the `filteredPolicies` computed signal in PolicyStore,
+      // which correctly uses String.prototype.includes() on the full in-memory set.
 
       // WHY SINGLE-VALUE STATUS: json-server v0.x does not support array params
       // natively (e.g. ?status[]=Active&status[]=Pending). For multi-status
@@ -127,7 +132,12 @@ export class PolicyApiService {
     }
 
     if (sort?.active && sort.direction) {
-      params = params.set('_sort', sort.active).set('_order', sort.direction);
+      // WHY PREFIX DASH FOR DESC: json-server v1 beta changed sort syntax.
+      // v0 used `_sort=field&_order=desc`; v1 uses `_sort=-field` for descending
+      // and `_sort=field` (no prefix) for ascending. The `_order` param is ignored.
+      const sortValue =
+        sort.direction === 'desc' ? `-${sort.active}` : sort.active;
+      params = params.set('_sort', sortValue);
     }
 
     this.logger.debug('PolicyApiService.getAll()', { params: params.toString() });

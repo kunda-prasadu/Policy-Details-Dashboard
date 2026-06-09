@@ -8,8 +8,10 @@
 <section class="summary-panel" aria-label="Policy portfolio summary">
 
   <!-- ===================================================================== -->
-  <!-- Row 1: Status cards                                                    -->
+  <!-- Row 1: Policy Status header + Status cards                            -->
   <!-- ===================================================================== -->
+  <h2 class="section-heading">Policy Status</h2>
+
   <div class="status-cards" role="grid" aria-label="Policy status counts">
 
     @for (card of statusCards(); track card.status) {
@@ -41,8 +43,10 @@
   </div>
 
   <!-- ===================================================================== -->
-  <!-- Row 2: SVG arc widget + GWP bars                                       -->
+  <!-- Row 2: Key Metrics header + SVG arc widget + GWP bars               -->
   <!-- ===================================================================== -->
+  <h2 class="section-heading">Key Metrics</h2>
+
   <div class="widgets-row">
 
     <!-- ------------------------------------------------------------------ -->
