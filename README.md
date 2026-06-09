@@ -13,7 +13,7 @@ A production-quality insurance policy management dashboard built with **Angular 
 | Styling | SCSS (component-scoped) |
 | Unit Tests | Jasmine + Karma |
 | E2E Tests | Not configured in this repo |
-| Mock API | json-server |
+| Mock API | Custom Express server (server-side filter/search/sort/pagination + summary) |
 
 ## i18n Readiness
 
@@ -46,7 +46,7 @@ npm start
 |---|---|
 | `npm start` | Start Angular dev server at http://localhost:4200 |
 | `npm run build` | Production build with SSR |
-| `npm run start:api` | Start json-server mock API at http://localhost:3000 |
+| `npm run start:api` | Start the Express mock API at http://localhost:3000 |
 | `npm run generate:mock` | Regenerate 250 mock policy records |
 | `npm run watch` | Dev build in watch mode |
 | `npm test` | Run unit tests |
@@ -69,9 +69,23 @@ src/
 │   └── environment.prod.ts
 └── styles.scss
 mock-api/
+├── server.js          # Express mock API: server-side filter/search/sort/pagination + /summary
 ├── generate-data.js   # Faker-based seed script
-└── db.json            # json-server database (250 records)
+└── db.json            # Seed database (250 records)
 ```
+
+## API Contract
+
+The Angular client holds only the current page — filtering, search, sorting, pagination and the KPI summary are all computed server-side.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /policies?search=&status=&region=&lineOfBusiness=&currency=&premiumMin=&premiumMax=&effectiveDateFrom=&effectiveDateTo=&expiryDateFrom=&expiryDateTo=&sort=&order=&page=&pageSize=` | One filtered/sorted page; returns `{ data: Policy[], total: number }` |
+| `GET /policies/summary?<same filters>` | KPI aggregates over the filtered set (status counts, total premium, expiring-within-30-days, GWP by LOB) |
+| `GET /policies/:id` | Single policy |
+| `PATCH /policies/:id` | Partial update (flag for review, renew) — in-memory only |
+
+`search` is a true OR across `policyNumber`, `policyHolderName` and `underwriter`.
 
 
 ## Development server

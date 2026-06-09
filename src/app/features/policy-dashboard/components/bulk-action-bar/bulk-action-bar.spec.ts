@@ -21,6 +21,7 @@ import { of, Subject, throwError } from 'rxjs';
 import { BulkActionBar } from './bulk-action-bar';
 import { PolicyStore } from '../../store/policy.store';
 import { PolicyApiService } from '../../services/policy-api.service';
+import { pageOf, summaryOf } from '../../testing/policy-test-utils';
 import { Policy } from '../../models/policy.model';
 
 // ---------------------------------------------------------------------------
@@ -58,9 +59,10 @@ describe('BulkActionBar', () => {
 
   beforeEach(async () => {
     apiSpy = jasmine.createSpyObj<PolicyApiService>('PolicyApiService', [
-      'getAll', 'patch', 'flagPolicy', 'flagPolicies',
+      'getAll', 'getSummary', 'patch', 'flagPolicy', 'flagPolicies',
     ]);
-    apiSpy.getAll.and.returnValue(of([]));
+    apiSpy.getAll.and.returnValue(pageOf([]));
+    apiSpy.getSummary.and.returnValue(summaryOf());
     apiSpy.flagPolicies.and.returnValue(of([]));
 
     await TestBed.configureTestingModule({
@@ -89,7 +91,7 @@ describe('BulkActionBar', () => {
 
   it('flagForReview() should call store.flagSelectedPolicies()', () => {
     const p = makePolicy({ id: 'b1' });
-    apiSpy.getAll.and.returnValue(of([p]));
+    apiSpy.getAll.and.returnValue(pageOf([p]));
     apiSpy.flagPolicies.and.returnValue(of([{ ...p, flaggedForReview: true }]));
 
     store.loadPolicies();
@@ -103,7 +105,7 @@ describe('BulkActionBar', () => {
 
   it('flagForReview() should open snackbar with singular message for 1 policy', () => {
     const p = makePolicy({ id: 'b2' });
-    apiSpy.getAll.and.returnValue(of([p]));
+    apiSpy.getAll.and.returnValue(pageOf([p]));
     apiSpy.flagPolicies.and.returnValue(of([{ ...p, flaggedForReview: true }]));
 
     store.loadPolicies();
@@ -121,7 +123,7 @@ describe('BulkActionBar', () => {
   it('flagForReview() should open snackbar with plural message for multiple policies', () => {
     const p1 = makePolicy({ id: 'b3' });
     const p2 = makePolicy({ id: 'b4' });
-    apiSpy.getAll.and.returnValue(of([p1, p2]));
+    apiSpy.getAll.and.returnValue(pageOf([p1, p2]));
     apiSpy.flagPolicies.and.returnValue(of([
       { ...p1, flaggedForReview: true },
       { ...p2, flaggedForReview: true },
@@ -141,7 +143,7 @@ describe('BulkActionBar', () => {
 
   it('flagForReview() should show Retry snackbar and invoke store retry on action when flagging fails', () => {
     const p = makePolicy({ id: 'b5' });
-    apiSpy.getAll.and.returnValue(of([p]));
+    apiSpy.getAll.and.returnValue(pageOf([p]));
     apiSpy.flagPolicies.and.returnValue(throwError(() => new Error('flag failed')));
 
     store.loadPolicies();

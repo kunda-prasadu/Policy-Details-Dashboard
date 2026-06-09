@@ -25,6 +25,7 @@ import { MatBottomSheet } from '@angular/material/bottom-sheet';
 import { PolicyFilter } from './policy-filter';
 import { PolicyStore } from '../../store/policy.store';
 import { PolicyApiService } from '../../services/policy-api.service';
+import { pageOf, summaryOf } from '../../testing/policy-test-utils';
 
 // ---------------------------------------------------------------------------
 // Suite
@@ -45,9 +46,10 @@ describe('PolicyFilter', () => {
 
   beforeEach(async () => {
     apiSpy = jasmine.createSpyObj<PolicyApiService>('PolicyApiService', [
-      'getAll', 'patch', 'flagPolicy', 'flagPolicies',
+      'getAll', 'getSummary', 'patch', 'flagPolicy', 'flagPolicies',
     ]);
-    apiSpy.getAll.and.returnValue(of([]));
+    apiSpy.getAll.and.returnValue(pageOf([]));
+    apiSpy.getSummary.and.returnValue(summaryOf());
 
     await TestBed.configureTestingModule({
       imports: [PolicyFilter],

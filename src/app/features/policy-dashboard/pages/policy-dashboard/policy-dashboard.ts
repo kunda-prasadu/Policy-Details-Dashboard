@@ -71,16 +71,14 @@ export class PolicyDashboard implements OnInit {
   private readonly dialog = inject(MatDialog);
 
   /**
-   * Whether the filtered policy list has at least one visible result.
+   * Whether the filtered result set has at least one record.
    *
-   * WHY COMPUTED HERE (not in the store): This is a presentation concern
-   * specific to the dashboard page — whether to show the table or the
-   * empty state. The store's filtered list is the source of truth; the
-   * boolean wrapper lives in the view layer where it is consumed.
+   * WHY store.total() (not policies().length): With server-side pagination
+   * `policies()` is only the current page. `total` is the server's count of
+   * ALL matching records — the correct signal for deciding between the table
+   * and the empty state.
    */
-  protected readonly hasResults = computed(
-    () => this.store.filteredPolicies().length > 0,
-  );
+  protected readonly hasResults = computed(() => this.store.total() > 0);
 
   /**
    * Trigger the initial data load when the route is activated.

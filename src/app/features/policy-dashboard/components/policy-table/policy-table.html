@@ -14,6 +14,7 @@
     matSort
     [matSortActive]="store.sort().active"
     [matSortDirection]="store.sort().direction"
+    (matSortChange)="onSortChange($event)"
     class="policy-table"
     aria-label="Insurance policies"
   >
@@ -196,13 +197,19 @@
 </div>
 
 <!--
-  WHY showFirstLastButtons: Allows one-click navigation to the last page —
-  useful when an underwriter wants to see the most recently added policies
-  (which are appended at the end of the sorted list).
+  WHY CONTROLLED (bound to store signals + (page) handler): Pagination is
+  server-side. [length] is the server's total record count; [pageIndex] and
+  [pageSize] reflect store.pagination(); (page) drives store.setPage() which
+  fetches the requested page from the API.
+
+  WHY showFirstLastButtons: One-click navigation to the first/last page.
 -->
 <mat-paginator
+  [length]="store.total()"
+  [pageSize]="store.pagination().pageSize"
+  [pageIndex]="store.pagination().pageIndex"
   [pageSizeOptions]="pageSizeOptions"
-  [pageSize]="10"
+  (page)="onPage($event)"
   showFirstLastButtons
   aria-label="Navigate policy pages"
 />
