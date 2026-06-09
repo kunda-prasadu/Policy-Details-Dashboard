@@ -243,9 +243,7 @@ export class PolicyTable implements AfterViewInit {
     //
     // When store.filteredPolicies() changes (filter applied, reload completes):
     // 1. Update dataSource.data so the table renders fresh rows.
-    // 2. Reset the paginator to page 0 — the user must be on page 1 to see
-    //    results relevant to the new filter context.
-    // 3. Reset _pageIndex so pageIds() recomputes from page 0.
+    // 2. Preserve paginator state so page index remains stable across filter changes.
     //
     // paginatorRef() is also tracked by this effect. When the view initialises
     // (paginatorRef changes from undefined to MatPaginator), the effect re-runs
@@ -253,8 +251,6 @@ export class PolicyTable implements AfterViewInit {
     // the paginator's visual state matches _pageIndex = 0 on first render.
     effect(() => {
       this.dataSource.data = this.store.filteredPolicies();
-      this.paginatorRef()?.firstPage();
-      this._pageIndex.set(0);
     });
   }
 

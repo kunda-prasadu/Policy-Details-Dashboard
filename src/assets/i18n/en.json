@@ -1,0 +1,24 @@
+{
+  "app": {
+    "title": "Policy Hub",
+    "subtitle": "Chubb APAC"
+  },
+  "bulkActions": {
+    "selected": "{{count}} policies selected",
+    "clear": "Clear",
+    "flagForReview": "Flag for Review",
+    "flagSuccessOne": "1 policy flagged for review",
+    "flagSuccessMany": "{{count}} policies flagged for review",
+    "flagFailedOne": "Flag for review failed for 1 policy",
+    "flagFailedMany": "Flag for review failed for {{count}} policies",
+    "retry": "Retry"
+  },
+  "table": {
+    "policyNumber": "Policy #",
+    "policyHolder": "Policyholder",
+    "status": "Status",
+    "region": "Region",
+    "premium": "Premium",
+    "actions": "Actions"
+  }
+}

@@ -11,9 +11,15 @@ A production-quality insurance policy management dashboard built with **Angular 
 | State | Signal-based custom store |
 | Rendering | SSR (`@angular/ssr`) |
 | Styling | SCSS (component-scoped) |
-| Unit Tests | Vitest |
-| E2E Tests | Playwright |
+| Unit Tests | Jasmine + Karma |
+| E2E Tests | Not configured in this repo |
 | Mock API | json-server |
+
+## i18n Readiness
+
+- Locale provider is configured to `en-US` in app configuration.
+- Translation dictionary scaffolding is available under `src/assets/i18n/en.json`.
+- The current UI remains English-first; keys are prepared for incremental migration.
 
 ## Prerequisites
 
@@ -112,13 +118,7 @@ ng test
 
 ## Running end-to-end tests
 
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+E2E tests are currently not configured in this repository.
 
 ## Additional Resources
 

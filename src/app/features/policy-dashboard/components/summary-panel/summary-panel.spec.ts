@@ -57,16 +57,13 @@ describe('SummaryPanel', () => {
   let component: SummaryPanel;
   let store: PolicyStore;
   let apiSpy: jasmine.SpyObj<PolicyApiService>;
-  let dialogSpy: jasmine.SpyObj<MatDialog>;
+  let openDialogSpy: jasmine.Spy;
 
   beforeEach(async () => {
     apiSpy = jasmine.createSpyObj<PolicyApiService>('PolicyApiService', [
       'getAll', 'patch', 'flagPolicy', 'flagPolicies',
     ]);
     apiSpy.getAll.and.returnValue(of([]));
-
-    dialogSpy = jasmine.createSpyObj<MatDialog>('MatDialog', ['open']);
-    dialogSpy.open.and.returnValue({} as ReturnType<MatDialog['open']>);
 
     await TestBed.configureTestingModule({
       imports: [SummaryPanel],
@@ -76,7 +73,6 @@ describe('SummaryPanel', () => {
         provideHttpClientTesting(),
         PolicyStore,
         { provide: PolicyApiService, useValue: apiSpy },
-        { provide: MatDialog, useValue: dialogSpy },
         { provide: LOCALE_ID, useValue: 'en-US' },
       ],
       schemas: [NO_ERRORS_SCHEMA],
@@ -85,6 +81,8 @@ describe('SummaryPanel', () => {
     fixture = TestBed.createComponent(SummaryPanel);
     component = fixture.componentInstance;
     store = TestBed.inject(PolicyStore);
+    const dialog = (component as unknown as { dialog: MatDialog }).dialog;
+    openDialogSpy = spyOn(dialog, 'open').and.returnValue({} as ReturnType<MatDialog['open']>);
     fixture.detectChanges();
   });
 
@@ -244,7 +242,7 @@ describe('SummaryPanel', () => {
   describe('openStatusDrilldown()', () => {
     it('should open MatDialog with status mode data', () => {
       component.openStatusDrilldown('Active');
-      expect(dialogSpy.open).toHaveBeenCalledOnceWith(
+      expect(openDialogSpy).toHaveBeenCalledOnceWith(
         jasmine.any(Function),
         jasmine.objectContaining({
           data: jasmine.objectContaining({ mode: 'status', status: 'Active' }),
@@ -254,7 +252,7 @@ describe('SummaryPanel', () => {
 
     it('should open for different statuses', () => {
       component.openStatusDrilldown('Expired');
-      expect(dialogSpy.open).toHaveBeenCalledWith(
+      expect(openDialogSpy).toHaveBeenCalledWith(
         jasmine.any(Function),
         jasmine.objectContaining({
           data: jasmine.objectContaining({ status: 'Expired' }),

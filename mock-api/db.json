@@ -1930,7 +1930,7 @@
       "effectiveDate": "2021-01-02",
       "expiryDate": "2022-01-02",
       "underwriter": "Joyce Torphy",
-      "flaggedForReview": false
+      "flaggedForReview": true
     },
     {
       "id": "bb5bab7f-550b-43b7-9b43-7b6c12cde66b",
@@ -3500,5 +3500,6 @@
       "underwriter": "Carolyne Corwin DDS",
       "flaggedForReview": false
     }
-  ]
+  ],
+  "$schema": "./node_modules/json-server/schema.json"
 }

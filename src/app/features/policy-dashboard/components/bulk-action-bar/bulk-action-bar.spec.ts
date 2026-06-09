@@ -16,7 +16,7 @@ import { provideZonelessChangeDetection, NO_ERRORS_SCHEMA } from '@angular/core'
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { of } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { BulkActionBar } from './bulk-action-bar';
 import { PolicyStore } from '../../store/policy.store';
@@ -54,7 +54,7 @@ describe('BulkActionBar', () => {
   let component: BulkActionBar;
   let store: PolicyStore;
   let apiSpy: jasmine.SpyObj<PolicyApiService>;
-  let snackBarSpy: jasmine.SpyObj<MatSnackBar>;
+  let openSnackBarSpy: jasmine.Spy;
 
   beforeEach(async () => {
     apiSpy = jasmine.createSpyObj<PolicyApiService>('PolicyApiService', [
@@ -62,8 +62,6 @@ describe('BulkActionBar', () => {
     ]);
     apiSpy.getAll.and.returnValue(of([]));
     apiSpy.flagPolicies.and.returnValue(of([]));
-
-    snackBarSpy = jasmine.createSpyObj<MatSnackBar>('MatSnackBar', ['open']);
 
     await TestBed.configureTestingModule({
       imports: [BulkActionBar],
@@ -73,7 +71,6 @@ describe('BulkActionBar', () => {
         provideHttpClientTesting(),
         PolicyStore,
         { provide: PolicyApiService, useValue: apiSpy },
-        { provide: MatSnackBar, useValue: snackBarSpy },
       ],
       schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
@@ -81,6 +78,8 @@ describe('BulkActionBar', () => {
     fixture = TestBed.createComponent(BulkActionBar);
     component = fixture.componentInstance;
     store = TestBed.inject(PolicyStore);
+    const snackBar = (component as unknown as { snackBar: MatSnackBar }).snackBar;
+    openSnackBarSpy = spyOn(snackBar, 'open').and.stub();
     fixture.detectChanges();
   });
 
@@ -112,7 +111,7 @@ describe('BulkActionBar', () => {
 
     component.flagForReview();
 
-    expect(snackBarSpy.open).toHaveBeenCalledWith(
+    expect(openSnackBarSpy).toHaveBeenCalledWith(
       '1 policy flagged for review',
       'Dismiss',
       jasmine.any(Object),
@@ -133,10 +132,35 @@ describe('BulkActionBar', () => {
 
     component.flagForReview();
 
-    expect(snackBarSpy.open).toHaveBeenCalledWith(
+    expect(openSnackBarSpy).toHaveBeenCalledWith(
       '2 policies flagged for review',
       'Dismiss',
       jasmine.any(Object),
     );
+  });
+
+  it('flagForReview() should show Retry snackbar and invoke store retry on action when flagging fails', () => {
+    const p = makePolicy({ id: 'b5' });
+    apiSpy.getAll.and.returnValue(of([p]));
+    apiSpy.flagPolicies.and.returnValue(throwError(() => new Error('flag failed')));
+
+    store.loadPolicies();
+    store.selectAll(['b5']);
+    spyOn(store, 'retryLastFailedFlag').and.callThrough();
+
+    const action$ = new Subject<void>();
+    openSnackBarSpy.and.returnValue({
+      onAction: () => action$.asObservable(),
+    } as never);
+
+    component.flagForReview();
+
+    expect(openSnackBarSpy).toHaveBeenCalledWith(
+      'Flag for review failed for 1 policy',
+      'Retry',
+      jasmine.any(Object),
+    );
+    action$.next();
+    expect(store.retryLastFailedFlag).toHaveBeenCalled();
   });
 });

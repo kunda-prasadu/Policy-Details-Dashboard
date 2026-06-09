@@ -68,6 +68,10 @@ export interface PolicyFilterFormValue {
   startDate: Date | string | null;
   /** JS Date selected from the datepicker; null when unset. */
   endDate: Date | string | null;
+  /** JS Date selected from the datepicker; null when unset. */
+  expiryStartDate: Date | string | null;
+  /** JS Date selected from the datepicker; null when unset. */
+  expiryEndDate: Date | string | null;
   /** Minimum premium amount; 0 means no minimum. */
   minPremium: number;
 }
@@ -91,6 +95,8 @@ const FILTER_DEFAULTS: PolicyFilterFormValue = {
   lineOfBusiness: null,
   startDate: null,
   endDate: null,
+  expiryStartDate: null,
+  expiryEndDate: null,
   minPremium: 0,
 };
 
@@ -219,6 +225,8 @@ export class PolicyFilter {
         (params['lob'] as LineOfBusiness) ?? saved?.lineOfBusiness ?? FILTER_DEFAULTS.lineOfBusiness,
       startDate: params['startDate'] ?? (saved?.startDate ?? FILTER_DEFAULTS.startDate),
       endDate: params['endDate'] ?? (saved?.endDate ?? FILTER_DEFAULTS.endDate),
+      expiryStartDate: params['expiryStartDate'] ?? (saved?.expiryStartDate ?? FILTER_DEFAULTS.expiryStartDate),
+      expiryEndDate: params['expiryEndDate'] ?? (saved?.expiryEndDate ?? FILTER_DEFAULTS.expiryEndDate),
       minPremium: params['minPremium']
         ? Number(params['minPremium'])
         : (saved?.minPremium ?? FILTER_DEFAULTS.minPremium),
@@ -232,6 +240,8 @@ export class PolicyFilter {
       lineOfBusiness: [seed.lineOfBusiness],
       startDate: [seed.startDate],
       endDate: [seed.endDate],
+      expiryStartDate: [seed.expiryStartDate],
+      expiryEndDate: [seed.expiryEndDate],
       minPremium: [seed.minPremium],
     });
 
@@ -247,6 +257,8 @@ export class PolicyFilter {
         v.lineOfBusiness,
         v.startDate,
         v.endDate,
+        v.expiryStartDate,
+        v.expiryEndDate,
         (v.minPremium ?? 0) > 0 ? v.minPremium : null,
       ].filter(Boolean).length;
     });
@@ -260,6 +272,8 @@ export class PolicyFilter {
       if (v.lineOfBusiness) chips.push({ key: 'lineOfBusiness', label: `LOB: ${v.lineOfBusiness}` });
       if (v.startDate) chips.push({ key: 'startDate', label: `From: ${this.formatChipDate(v.startDate)}` });
       if (v.endDate) chips.push({ key: 'endDate', label: `To: ${this.formatChipDate(v.endDate)}` });
+      if (v.expiryStartDate) chips.push({ key: 'expiryStartDate', label: `Expiry from: ${this.formatChipDate(v.expiryStartDate)}` });
+      if (v.expiryEndDate) chips.push({ key: 'expiryEndDate', label: `Expiry to: ${this.formatChipDate(v.expiryEndDate)}` });
       if ((v.minPremium ?? 0) > 0) {
         chips.push({ key: 'minPremium', label: `Min: $${(v.minPremium).toLocaleString()}` });
       }
@@ -375,6 +389,8 @@ export class PolicyFilter {
       lineOfBusiness: FILTER_DEFAULTS.lineOfBusiness,
       startDate: FILTER_DEFAULTS.startDate,
       endDate: FILTER_DEFAULTS.endDate,
+      expiryStartDate: FILTER_DEFAULTS.expiryStartDate,
+      expiryEndDate: FILTER_DEFAULTS.expiryEndDate,
       minPremium: FILTER_DEFAULTS.minPremium,
     });
   }
@@ -404,6 +420,12 @@ export class PolicyFilter {
       effectiveDateTo: val.endDate
         ? this.toIsoDate(val.endDate)
         : undefined,
+      expiryDateFrom: val.expiryStartDate
+        ? this.toIsoDate(val.expiryStartDate)
+        : undefined,
+      expiryDateTo: val.expiryEndDate
+        ? this.toIsoDate(val.expiryEndDate)
+        : undefined,
       premiumMin: (val.minPremium ?? 0) > 0 ? val.minPremium : undefined,
     };
   }
@@ -424,6 +446,8 @@ export class PolicyFilter {
         lob: val.lineOfBusiness || null,
         startDate: val.startDate ? this.toIsoDate(val.startDate) : null,
         endDate: val.endDate ? this.toIsoDate(val.endDate) : null,
+        expiryStartDate: val.expiryStartDate ? this.toIsoDate(val.expiryStartDate) : null,
+        expiryEndDate: val.expiryEndDate ? this.toIsoDate(val.expiryEndDate) : null,
         minPremium: (val.minPremium ?? 0) > 0 ? val.minPremium : null,
       },
       replaceUrl: true,
@@ -476,6 +500,8 @@ export class PolicyFilter {
       val.lineOfBusiness ||
       val.startDate ||
       val.endDate ||
+      val.expiryStartDate ||
+      val.expiryEndDate ||
       (val.minPremium ?? 0) > 0
     );
   }

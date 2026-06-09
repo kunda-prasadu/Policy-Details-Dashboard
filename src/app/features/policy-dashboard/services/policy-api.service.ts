@@ -90,31 +90,37 @@ export class PolicyApiService {
     let params = new HttpParams().set('_per_page', '250');
 
     if (filters) {
-      // WHY NO `q=` PARAM: json-server v1 beta (^1.0.0-beta.x) does not support
-      // the `q` full-text search parameter — it silently returns 0 results.
-      // Free-text search (policyNumber / policyHolderName) is handled entirely
-      // client-side by the `filteredPolicies` computed signal in PolicyStore,
-      // which correctly uses String.prototype.includes() on the full in-memory set.
-
-      // WHY SINGLE-VALUE STATUS: json-server v0.x does not support array params
-      // natively (e.g. ?status[]=Active&status[]=Pending). For multi-status
-      // filtering the store falls back to client-side filtering on the full
-      // result set. We send the first selected status as a server-side hint
-      // when exactly one is chosen.
-      if (filters.statuses?.length === 1) {
-        params = params.set('status', filters.statuses[0]);
+      // Free-text search across the required fields.
+      if (filters.search?.trim()) {
+        const term = filters.search.trim();
+        params = params
+          .set('policyNumber_like', term)
+          .set('policyHolderName_like', term)
+          .set('underwriter_like', term);
       }
 
-      if (filters.regions?.length === 1) {
-        params = params.set('region', filters.regions[0]);
+      if (filters.statuses?.length) {
+        for (const status of filters.statuses) {
+          params = params.append('status', status);
+        }
       }
 
-      if (filters.linesOfBusiness?.length === 1) {
-        params = params.set('lineOfBusiness', filters.linesOfBusiness[0]);
+      if (filters.regions?.length) {
+        for (const region of filters.regions) {
+          params = params.append('region', region);
+        }
       }
 
-      if (filters.currencies?.length === 1) {
-        params = params.set('currency', filters.currencies[0]);
+      if (filters.linesOfBusiness?.length) {
+        for (const lob of filters.linesOfBusiness) {
+          params = params.append('lineOfBusiness', lob);
+        }
+      }
+
+      if (filters.currencies?.length) {
+        for (const currency of filters.currencies) {
+          params = params.append('currency', currency);
+        }
       }
 
       // flaggedForReview: json-server matches boolean fields directly
@@ -128,6 +134,19 @@ export class PolicyApiService {
       }
       if (filters.premiumMax !== undefined) {
         params = params.set('premiumAmount_lte', filters.premiumMax.toString());
+      }
+
+      if (filters.effectiveDateFrom) {
+        params = params.set('effectiveDate_gte', filters.effectiveDateFrom);
+      }
+      if (filters.effectiveDateTo) {
+        params = params.set('effectiveDate_lte', filters.effectiveDateTo);
+      }
+      if (filters.expiryDateFrom) {
+        params = params.set('expiryDate_gte', filters.expiryDateFrom);
+      }
+      if (filters.expiryDateTo) {
+        params = params.set('expiryDate_lte', filters.expiryDateTo);
       }
     }
 

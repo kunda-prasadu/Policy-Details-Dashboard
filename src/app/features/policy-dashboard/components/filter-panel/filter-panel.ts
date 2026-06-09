@@ -117,6 +117,8 @@ export class FilterPanel {
     lineOfBusiness: [this.data?.lineOfBusiness ?? null],
     startDate: [this.data?.startDate ?? null],
     endDate: [this.data?.endDate ?? null],
+    expiryStartDate: [this.data?.expiryStartDate ?? null],
+    expiryEndDate: [this.data?.expiryEndDate ?? null],
     minPremium: [this.data?.minPremium ?? 0],
   });
 
