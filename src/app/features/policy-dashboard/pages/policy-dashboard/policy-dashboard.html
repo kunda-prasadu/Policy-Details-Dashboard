@@ -1,0 +1,78 @@
+<!--
+  WHY @defer (on idle) for the table section:
+  The summary panel and filter bar are above-the-fold and must render immediately.
+  The data table, bulk-action toolbar, and empty-state are below-the-fold and
+  are not needed until the browser finishes its initial paint. Deferring on idle
+  lets the browser first commit the header, filter bar, and KPI cards to the DOM
+  before allocating budget for the larger MatTable bundle.
+
+  WHY @placeholder { <div aria-busy="true"></div> }:
+  The @defer placeholder keeps the layout stable (no CLS) during the idle delay.
+  aria-busy="true" signals to assistive technologies that content is loading.
+
+  WHY <section class="dashboard-table" role="region" aria-label="Policy list">:
+  Wrapping the table in a landmark region allows screen-reader users to jump
+  directly to the policy list via the regions shortcut, bypassing the filter bar
+  and summary panel.
+-->
+<main class="dashboard">
+
+  <!-- ================================================================
+       Always-visible above-the-fold content
+       ================================================================ -->
+  <app-policy-filter />
+  <app-summary-panel />
+
+  <!-- ================================================================
+       Loading skeleton — visible while store.loading() is true
+       ================================================================ -->
+  @if (store.loading()) {
+    <app-loading-skeleton />
+  }
+
+  <!-- ================================================================
+       Error state — visible when an HTTP error has been captured
+       ================================================================ -->
+  @else if (store.error()) {
+    <app-error-state
+      [message]="store.error()!"
+      (retryClick)="retry()"
+    />
+  }
+
+  <!-- ================================================================
+       Main content — deferred until browser is idle
+       ================================================================ -->
+  @else {
+    @defer (on idle) {
+
+      @if (store.hasSelection()) {
+        <app-bulk-action-bar />
+      }
+
+      @if (hasResults()) {
+        <section
+          class="dashboard-table"
+          role="region"
+          aria-label="Policy list"
+        >
+          <app-policy-table (rowClick)="openPolicyDetail($event)" />
+        </section>
+      } @else {
+        <app-empty-state
+          title="No policies found"
+          description="Try adjusting your filters or clearing them to see all policies."
+          (clearFilters)="clearFilters()"
+        />
+      }
+
+    } @placeholder {
+      <!--
+        Placeholder shown while the defer block waits for an idle frame.
+        aria-busy keeps the accessibility tree consistent with the loading state.
+      -->
+      <div aria-busy="true" class="defer-placeholder"></div>
+    }
+  }
+
+</main>

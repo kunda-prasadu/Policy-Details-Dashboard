@@ -1,0 +1,70 @@
+:host {
+  display: inline-flex;
+  align-items: center;
+}
+
+// ---------------------------------------------------------------------------
+// Swatch grid — rendered inside the MatMenu overlay panel
+// ---------------------------------------------------------------------------
+
+// WHY ::ng-deep on the mat-menu panel:
+// MatMenu's overlay panel lives outside the component's shadow in the CDK
+// overlay container. The .palette-picker-menu class is applied to the panel
+// via `panelClass` in the mat-menu declaration, but component-scoped SCSS
+// cannot reach it. We use the globally-scoped .palette-picker-menu class
+// in styles.scss instead — see the comment there. This file only styles
+// the .palette-grid and .swatch elements that ARE inside the component.
+//
+// The ::ng-deep approach is intentionally avoided here; global override in
+// styles.scss is preferred for overlay panel sizing.
+
+.palette-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 40px);
+  gap: 8px;
+  padding: 12px;
+}
+
+// ---------------------------------------------------------------------------
+// Individual swatch button
+// ---------------------------------------------------------------------------
+
+.swatch {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 150ms ease, border-color 150ms ease;
+  padding: 0;
+  outline-offset: 3px;
+
+  &:hover {
+    transform: scale(1.15);
+    border-color: rgba(255, 255, 255, 0.6);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary, #1565C0);
+  }
+
+  // Active palette shows a white ring to distinguish from hover
+  &--active {
+    border-color: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25);
+  }
+}
+
+.swatch__check {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: #ffffff;
+  // WHY text-shadow: improves check visibility on very light swatch colours
+  // (e.g. Amber, Emerald-light) by adding a subtle dark outline.
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
+}

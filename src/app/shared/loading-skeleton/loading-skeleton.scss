@@ -1,0 +1,107 @@
+// DECISION: Shimmer is implemented with a single moving linear-gradient
+//           background-position animation rather than pseudo-elements or
+//           multiple keyframe sets.
+// REASON: One @keyframes + background-size/position technique gives the
+//         illusion of a light wave sweeping across the element using a single
+//         CSS rule applied to every .shimmer surface. No JS required.
+
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 0 16px;
+}
+
+// ---------------------------------------------------------------------------
+// Shimmer animation
+// ---------------------------------------------------------------------------
+
+// WHY background-size: 200% 100%: The gradient is twice the element width so
+// the bright midpoint can travel from off-left to off-right in one animation
+// cycle, creating the sweeping light effect.
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position:  200% 0; }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--mat-sys-surface-variant, #e0e0e0) 25%,
+    color-mix(in srgb, var(--mat-sys-surface-variant, #e0e0e0) 60%, white) 50%,
+    var(--mat-sys-surface-variant, #e0e0e0) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+  border-radius: var(--mat-sys-corner-small, 4px);
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    // Still show a muted static state — not invisible, just not animated.
+    background: var(--mat-sys-surface-variant, #e0e0e0);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Lines within shimmer containers
+// ---------------------------------------------------------------------------
+
+.shimmer__line {
+  height: 14px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--mat-sys-on-surface, #000) 12%, transparent);
+
+  &--short  { width: 30%; }
+  &--medium { width: 55%; }
+  &--wide   { width: 80%; }
+  &--narrow { width: 20%; }
+}
+
+// ---------------------------------------------------------------------------
+// Summary cards row
+// ---------------------------------------------------------------------------
+
+.skeleton-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+
+  @media (max-width: 899px) { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 499px) { grid-template-columns: 1fr; }
+}
+
+.skeleton-card {
+  height: 100px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-radius: var(--mat-sys-corner-medium, 12px);
+}
+
+// ---------------------------------------------------------------------------
+// Table header + row skeletons
+// ---------------------------------------------------------------------------
+
+.skeleton-header,
+.skeleton-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+  border-radius: var(--mat-sys-corner-small, 4px);
+}
+
+.skeleton-header {
+  height: 48px;
+}
+
+.skeleton-row {
+  height: 56px;
+
+  // Alternate rows are slightly lighter to mimic table row striping
+  &:nth-child(even) {
+    background-blend-mode: luminosity;
+    opacity: 0.85;
+  }
+}

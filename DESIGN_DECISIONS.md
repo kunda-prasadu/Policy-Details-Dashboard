@@ -275,3 +275,51 @@ This document records every significant architectural and technical decision mad
 - Two separate dialog components: `PolicyDetailDialog` and `PolicyListDialog`.
 
 **Reason:** Both modes share: `MAT_DIALOG_DATA` injection, `MatDialogRef.close()` for dismissal, `renew()` and `flagDetail()` store actions, and the same dialog header/footer chrome. Merging them reduces file count from 6 to 3. The `@if` branches are clearly separated — neither bleeds into the other. If complexity grows (e.g. the list mode needs its own sort/filter), splitting becomes justified; premature at this stage.
+
+---
+
+## DD-024 · `@defer (on idle)` for the Table Section
+
+**Decision:** The BulkActionBar, PolicyTable, and EmptyState are wrapped in an `@defer (on idle)` block in the PolicyDashboard template.
+
+**Alternatives Considered:**
+- Rendering all components eagerly (no `@defer`).
+- Using `@defer (on viewport)` scoped to a container div.
+
+**Reason:** The filter bar and summary panel are above the fold and must paint on first render. The table, bulk-action toolbar, and empty state are below the fold. `on idle` defers them until the browser has a free frame after first paint, keeping the LCP focused on the visible summary. `on viewport` was considered but requires a static height placeholder to trigger; `on idle` is simpler and sufficient. The `@placeholder <div aria-busy="true">` prevents layout shift and correctly signals loading state to assistive technologies.
+
+---
+
+## DD-025 · ThemePicker: Runtime CSS Custom Property Overrides vs Build-time SCSS Classes
+
+**Decision:** `ThemePickerComponent` applies palette changes by setting `document.documentElement.style.setProperty('--mat-sys-primary*', value)` at runtime.
+
+**Alternatives Considered:**
+1. Pre-generating 10 `@include mat.theme()` blocks in styles.scss, switching via `data-palette` attribute on `<html>`.
+2. Angular CDK Overlay theme service.
+3. A third-party theming library.
+
+**Reason:** Generating 10 full M3 theme blocks at build time would add ~150–300 kB of CSS (each `mat.theme()` generates ~300+ CSS rules) to the initial stylesheet payload. Runtime `style.setProperty()` on 4 tokens is zero-cost — no extra CSS shipped, no SCSS changes required when adding a new palette. Angular Material 3's token-based architecture is designed to support exactly this pattern: M3 system tokens flow through all components, so overriding only the primary-family tokens produces a visually coherent brand colour change across buttons, chips, tabs, and focused inputs.
+
+---
+
+## DD-026 · `EmptyState` and `ErrorState` Are Store-Agnostic Shared Components
+
+**Decision:** `EmptyState` and `ErrorState` live in `src/app/shared/` and communicate via `output()` events. They do not inject `PolicyStore`.
+
+**Alternatives Considered:**
+- Injecting `PolicyStore` directly (simpler in the short term).
+- Passing a callback function as an `@Input`.
+
+**Reason:** These components must be reusable across feature pages that have different stores or different retry/clear semantics. Injecting `PolicyStore` would couple a shared component to a feature-specific dependency, violating the shared/ contract. An `output()` event routes the action through the parent (PolicyDashboard), which decides the correct store method to call. A callback `@Input` would work but is less Angular-idiomatic than `output()` for DOM event-like interactions.
+
+---
+
+## DD-027 · `loadComponent()` for the Default Route Even With a Single Route
+
+**Decision:** The `''` route uses `loadComponent()` rather than an eager `component:` import.
+
+**Alternatives Considered:**
+- `{ path: '', component: PolicyDashboard }` with an eager import.
+
+**Reason:** The architecture constraint (Prompt 7) specifies "lazy-loaded via Angular Router only". Even with one route today, `loadComponent()` keeps the root bundle minimal (App shell + ThemePickerComponent + router + M3 theme) and defers the 627 kB policy domain chunk until navigation. This future-proofs the app: adding a second route (settings, login) does not require converting the existing route to lazy loading later. Build output confirms the split is working: the initial bundle is 2.2 MB browser (includes Angular + Material), while `policy-dashboard` is a separate 627 kB lazy chunk.

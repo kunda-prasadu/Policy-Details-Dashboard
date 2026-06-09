@@ -1,0 +1,41 @@
+// DECISION: Dashboard layout uses a single-column CSS Grid with a max-width
+//           content container. No component-level routing slots or side-nav.
+// ALTERNATIVES CONSIDERED: Flex column, multi-column grid.
+// REASON: A centred single-column layout is the conventional pattern for data
+//         dashboards where vertical scanning is the primary interaction. The
+//         max-width cap (1440px) prevents excessive line lengths on ultra-wide
+//         monitors while the inner padding keeps content away from viewport
+//         edges on smaller displays.
+
+:host {
+  display: block;
+}
+
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 16px 24px 40px;
+
+  // Reduce side padding on narrow viewports
+  @media (max-width: 599px) {
+    padding: 12px 12px 32px;
+    gap: 12px;
+  }
+}
+
+.dashboard-table {
+  // WHY overflow hidden on the section: prevents the mat-table's horizontal
+  // scroll from leaking outside the section landmark region on small screens.
+  overflow: hidden;
+  border-radius: var(--mat-sys-corner-medium, 12px);
+  box-shadow: var(--mat-sys-level1, none);
+}
+
+// Placeholder div shown during the @defer idle wait — zero height so it
+// does not shift layout.
+.defer-placeholder {
+  min-height: 0;
+}

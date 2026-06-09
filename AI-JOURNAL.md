@@ -220,4 +220,68 @@ Links the dialog container's accessible name to the visible title element. Scree
 ### Build Result
 `Application bundle generation complete. [2.868 seconds]` — 0 errors, 0 warnings.
 
+---
+
+## Session 007 — 2026-06-09 · Prompt 7: Dashboard Page, App Shell & Shared Components
+
+### What was built
+
+**`src/app/features/policy-dashboard/pages/policy-dashboard/`**
+- `policy-dashboard.ts` — `PolicyDashboard` page; `ngOnInit` calls `store.loadPolicies()`; `hasResults` computed; `openPolicyDetail()` opens `PolicyDrilldownDialog`; `retry()` and `clearFilters()` handlers; lazy-loaded via `loadComponent()` in `app.routes.ts`
+- `policy-dashboard.html` — `PolicyFilter` + `SummaryPanel` always visible; `@if loading / error / defer(on idle)` branches; `@defer` contains `BulkActionBar`, table section, or `EmptyState`; `@placeholder` div with `aria-busy`
+- `policy-dashboard.scss` — single-column flex layout; max-width 1440px centred; `dashboard-table` overflow hidden with M3 corner radius
+
+**`src/app/shared/loading-skeleton/`**
+- CSS-only shimmer animation (single `@keyframes shimmer` + `background-position` technique)
+- Summary card skeleton (4-cell grid) + table header + 6 row skeletons
+- `prefers-reduced-motion: reduce` disables animation; static muted surface shown instead
+- `role="status" aria-label="Loading policies..." aria-busy="true"` on host
+
+**`src/app/shared/error-state/`**
+- `error_outline` icon + "Unable to load policies" title + `message` input
+- `retryClick = output<void>()` — decoupled from PolicyStore
+- `role="alert" aria-live="assertive"` on host
+
+**`src/app/shared/empty-state/`**
+- `search_off` icon + `title`/`description` inputs + "Clear all filters" button
+- `clearFilters = output<void>()` — routes through PolicyDashboard to `store.clearFilters()`
+- `role="status" aria-live="polite"` on host
+
+**`src/app/shared/theme-picker/`**
+- `ThemePickerComponent`: palette icon button opens `MatMenu` with 5×2 swatch grid
+- 10 named palettes (`THEME_PALETTES` const array): Azure Blue, Forest, Crimson, Amber, Violet, Teal, Rose, Indigo, Emerald, Slate
+- Applies `--mat-sys-primary`, `--mat-sys-on-primary`, `--mat-sys-primary-container`, `--mat-sys-on-primary-container` as inline CSS custom property overrides on `document.documentElement`
+- Persists selection via `StorageService` with `PALETTE_STORAGE_KEY = 'policy-hub-palette'`
+- Active swatch shows `check` icon; `aria-pressed` on each swatch button
+- `viewChild(MatMenuTrigger)` to close menu after selection (plain `<button>` elements don't auto-close MatMenu)
+- SSR-safe: `isPlatformBrowser()` guard in `applyPalette()`
+
+**`src/app/app.ts`** — rewritten: `ChangeDetectionStrategy.OnPush`; imports `MatToolbarModule`, `MatButtonModule`, `MatIconModule`, `MatTooltipModule`, `ThemePickerComponent`, `RouterOutlet`; injects `ThemeService`
+
+**`src/app/app.html`** — rewritten: `<mat-toolbar role="banner">` with brand div + spacer + actions (`<app-theme-picker>` + dark/light toggle); `<router-outlet>`
+
+**`src/app/app.scss`** — written: `position: sticky` toolbar; brand title/subtitle typography; flex spacer; actions row gap
+
+**`src/app/app.routes.ts`** — `loadComponent()` lazy-loads `PolicyDashboard` at `path: ''`; `title: 'Policy Dashboard | Chubb APAC'`
+
+**`src/app/features/policy-dashboard/constants/policy.constants.ts`** — added `PALETTE_STORAGE_KEY = 'policy-hub-palette'`
+
+### Key Decisions
+
+**`@defer (on idle)` for the table section:**
+The filter bar and summary panel are above the fold and must render immediately. The table, bulk-action bar, and empty state are deferred until the browser has an idle frame — keeping first contentful paint fast and the initial bundle lean. The `@placeholder <div aria-busy>` prevents layout shift.
+
+**ThemePicker overrides CSS custom properties at runtime (not via SCSS classes):**
+Rather than pre-generating 10 `@include mat.theme()` blocks in styles.scss (which adds a large CSS payload), the ThemePicker overrides only the 4 primary-family tokens directly on `document.documentElement.style`. This is zero-cost SCSS-wise, instantly reflects in Angular Material 3 components that read `--mat-sys-primary*`, and is SSR-safe with a browser guard.
+
+**EmptyState and ErrorState have no store dependency:**
+Both live in `src/app/shared/` and emit events to their parent. This makes them reusable by any future feature page without importing the PolicyStore.
+
+**`loadComponent()` for the `''` route:**
+Even though `''` is the only route today, using `loadComponent()` keeps the initial bundle minimal (only App shell + ThemePicker + router). The entire policy domain (store, API service, all 7 components) is loaded only when the route resolves. The build output confirms this: `policy-dashboard` chunk is 627 kB (separate from the 2.2 MB initial bundle).
+
+### Build Result
+`Application bundle generation complete. [4.413 seconds]` — 0 errors, 0 warnings.
+Lazy chunks: `policy-dashboard` (627 kB), `policy-table` (168 kB), `bulk-action-bar` (49 kB), `empty-state` (6 kB) — all split correctly by `@defer`.
+
 <!-- New sessions will be appended below -->

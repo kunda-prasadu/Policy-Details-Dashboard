@@ -1,0 +1,14 @@
+<div class="empty-card">
+  <mat-icon class="empty-card__icon" aria-hidden="true">search_off</mat-icon>
+  <h2 class="empty-card__title">{{ title() }}</h2>
+  <p class="empty-card__description">{{ description() }}</p>
+  <button
+    mat-stroked-button
+    class="empty-card__action"
+    (click)="clearFilters.emit()"
+    aria-label="Clear all active filters"
+  >
+    <mat-icon>filter_alt_off</mat-icon>
+    Clear all filters
+  </button>
+</div>

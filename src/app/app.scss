@@ -1,0 +1,61 @@
+// DECISION: app.scss contains only app-shell layout rules — toolbar height,
+//           brand typography, spacer, and action row. No domain-specific styles.
+// REASON: Keeping the root stylesheet minimal prevents it from becoming a
+//         catch-all for miscellaneous overrides. Component-scoped SCSS handles
+//         each component's own presentation.
+
+:host {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+// ---------------------------------------------------------------------------
+// Persistent application header toolbar
+// ---------------------------------------------------------------------------
+
+.app-toolbar {
+  // WHY position: sticky: Keeps the header visible as the user scrolls through
+  // long policy lists without wrapping the entire page in a scroll container.
+  position: sticky;
+  top: 0;
+  z-index: 100;
+
+  // Subtle bottom border distinguishes the toolbar from page content in
+  // light mode; the outline-variant token ensures the border respects dark mode.
+  border-bottom: 1px solid var(--mat-sys-outline-variant, rgba(0, 0, 0, 0.12));
+}
+
+// Brand block: title (large) + subtitle (muted, small)
+.app-toolbar__brand {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.app-toolbar__title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--mat-sys-on-surface, #1c1b1f);
+}
+
+.app-toolbar__subtitle {
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mat-sys-on-surface-variant, #49454f);
+}
+
+// Flex spacer — grows to fill the gap between brand and actions
+.app-toolbar__spacer {
+  flex: 1 1 auto;
+}
+
+// Right-side action buttons row
+.app-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}

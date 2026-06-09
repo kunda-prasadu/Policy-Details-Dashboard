@@ -124,3 +124,13 @@ export const PAGE_SIZE_STORAGE_KEY = 'policy-hub-page-size' as const;
  * reload removes the need to reapply them every session.
  */
 export const FILTER_STORAGE_KEY = 'policy-hub-filters' as const;
+
+/**
+ * LocalStorage key used by ThemePickerComponent to persist the user's chosen
+ * colour palette across sessions.
+ *
+ * WHY A CONSTANT: Same rationale as THEME_STORAGE_KEY — a single source of
+ * truth prevents key drift between ThemePicker (write) and any future
+ * settings panel or palette initialiser (read).
+ */
+export const PALETTE_STORAGE_KEY = 'policy-hub-palette' as const;
