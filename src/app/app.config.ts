@@ -10,9 +10,10 @@ import {
 } from '@angular/core';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { provideClientHydration, withEventReplay } from '@angular/platform-browser';
-import { provideHttpClient, withFetch } from '@angular/common/http';
+import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 
 import { routes } from './app.routes';
+import { errorInterceptor } from './core/interceptors';
 
 /**
  * Root application configuration.
@@ -45,7 +46,9 @@ export const appConfig: ApplicationConfig = {
     // WHY THIS APPROACH: withFetch() replaces XMLHttpRequest with the native
     // Fetch API. This is required for SSR (Node 18+ has fetch built-in) and
     // reduces polyfill surface area in the browser bundle.
-    provideHttpClient(withFetch()),
+    // withInterceptors([errorInterceptor]): registers the functional error
+    // interceptor that normalises all HTTP errors before they reach feature stores.
+    provideHttpClient(withFetch(), withInterceptors([errorInterceptor])),
 
     // withEventReplay: captures user events during SSR hydration and replays
     // them once the client-side app takes over, preventing lost interactions.
