@@ -26,10 +26,31 @@ export interface PaginationState {
 
   /**
    * Total number of items across all pages.
-   * Populated from the X-Total-Count response header (json-server standard).
+   * Populated from the `total` field of the API's paginated response envelope.
    * Used by MatPaginator to calculate the page count and disable next/prev.
    */
   totalItems: number;
+}
+
+/**
+ * The page request portion of pagination state sent to the API.
+ * Excludes `totalItems` (a response value, not a request input).
+ */
+export type PageRequest = Pick<PaginationState, 'pageIndex' | 'pageSize'>;
+
+/**
+ * Paginated response envelope returned by `GET /policies`.
+ *
+ * WHY AN ENVELOPE (not a bare array + header): Returning `{ data, total }`
+ * makes the total count a first-class part of the typed response rather than a
+ * stringly-typed HTTP header the client must parse. The paginator binds
+ * directly to `total`.
+ */
+export interface PolicyPage<T = unknown> {
+  /** The records for the requested page. */
+  data: T[];
+  /** Total number of records matching the filters, across all pages. */
+  total: number;
 }
 
 /**

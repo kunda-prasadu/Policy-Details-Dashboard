@@ -77,64 +77,89 @@ describe('PolicyApiService', () => {
   });
 
   // -------------------------------------------------------------------------
-  // getAll — no params
+  // getAll — response envelope
   // -------------------------------------------------------------------------
 
-  it('getAll() should GET the policies endpoint with _per_page=250', () => {
-    const mockPolicies = [makePolicy()];
+  it('getAll() should GET the policies endpoint and return the { data, total } envelope', () => {
+    const page = { data: [makePolicy()], total: 123 };
 
-    service.getAll().subscribe((policies) => {
-      expect(policies).toEqual(mockPolicies);
+    service.getAll().subscribe((result) => {
+      expect(result).toEqual(page);
     });
 
-    const req = httpMock.expectOne(
-      (r) => r.url === BASE_URL && r.params.get('_per_page') === '250',
-    );
+    const req = httpMock.expectOne((r) => r.url === BASE_URL);
     expect(req.request.method).toBe('GET');
-    req.flush(mockPolicies);
+    req.flush(page);
   });
 
   // -------------------------------------------------------------------------
-  // getAll — with status filter
+  // getAll — pagination
   // -------------------------------------------------------------------------
 
-  it('getAll() with single status filter should add ?status= param', () => {
+  it('getAll() should map zero-based pageIndex to 1-based page + pageSize params', () => {
+    service.getAll(undefined, undefined, { pageIndex: 2, pageSize: 25 }).subscribe();
+
+    const req = httpMock.expectOne(
+      (r) =>
+        r.url === BASE_URL &&
+        r.params.get('page') === '3' &&
+        r.params.get('pageSize') === '25',
+    );
+    expect(req.request.method).toBe('GET');
+    req.flush({ data: [], total: 0 });
+  });
+
+  // -------------------------------------------------------------------------
+  // getAll — filters
+  // -------------------------------------------------------------------------
+
+  it('getAll() should add a single ?status= param', () => {
     service.getAll({ statuses: ['Active'] }).subscribe();
 
     const req = httpMock.expectOne(
       (r) => r.url === BASE_URL && r.params.get('status') === 'Active',
     );
-    expect(req.request.method).toBe('GET');
-    req.flush([]);
+    req.flush({ data: [], total: 0 });
   });
 
-  // -------------------------------------------------------------------------
-  // getAll — with sort
-  // -------------------------------------------------------------------------
-
-  it('getAll() with desc sort should prefix field with dash in _sort param', () => {
+  it('getAll() with desc sort should send sort + order params', () => {
     service
       .getAll(undefined, { active: 'premiumAmount', direction: 'desc' })
       .subscribe();
 
     const req = httpMock.expectOne(
-      (r) => r.url === BASE_URL && r.params.get('_sort') === '-premiumAmount',
+      (r) =>
+        r.url === BASE_URL &&
+        r.params.get('sort') === 'premiumAmount' &&
+        r.params.get('order') === 'desc',
     );
-    expect(req.request.method).toBe('GET');
-    req.flush([]);
+    req.flush({ data: [], total: 0 });
   });
 
-  it('getAll() with search should map to policyNumber/policyHolderName/underwriter _like params', () => {
+  it('getAll() with asc sort should send order=asc', () => {
+    service
+      .getAll(undefined, { active: 'expiryDate', direction: 'asc' })
+      .subscribe();
+
+    const req = httpMock.expectOne(
+      (r) =>
+        r.url === BASE_URL &&
+        r.params.get('sort') === 'expiryDate' &&
+        r.params.get('order') === 'asc',
+    );
+    req.flush({ data: [], total: 0 });
+  });
+
+  it('getAll() with search should map to a single OR-search param (no ANDed _like params)', () => {
     service.getAll({ search: 'Acme' }).subscribe();
 
-    const req = httpMock.expectOne((r) =>
-      r.url === BASE_URL &&
-      r.params.get('policyNumber_like') === 'Acme' &&
-      r.params.get('policyHolderName_like') === 'Acme' &&
-      r.params.get('underwriter_like') === 'Acme',
+    const req = httpMock.expectOne(
+      (r) =>
+        r.url === BASE_URL &&
+        r.params.get('search') === 'Acme' &&
+        r.params.get('policyNumber_like') === null,
     );
-    expect(req.request.method).toBe('GET');
-    req.flush([]);
+    req.flush({ data: [], total: 0 });
   });
 
   it('getAll() with multi-value filters should append repeated params', () => {
@@ -145,8 +170,7 @@ describe('PolicyApiService', () => {
       JSON.stringify(r.params.getAll('status')) === JSON.stringify(['Active', 'Pending']) &&
       JSON.stringify(r.params.getAll('region')) === JSON.stringify(['Japan', 'Singapore']),
     );
-    expect(req.request.method).toBe('GET');
-    req.flush([]);
+    req.flush({ data: [], total: 0 });
   });
 
   it('getAll() should include lineOfBusiness and currency repeated params', () => {
@@ -157,8 +181,7 @@ describe('PolicyApiService', () => {
       JSON.stringify(r.params.getAll('lineOfBusiness')) === JSON.stringify(['Marine', 'Property']) &&
       JSON.stringify(r.params.getAll('currency')) === JSON.stringify(['USD', 'SGD']),
     );
-    expect(req.request.method).toBe('GET');
-    req.flush([]);
+    req.flush({ data: [], total: 0 });
   });
 
   it('getAll() should map flaggedForReview and premium range params', () => {
@@ -167,11 +190,10 @@ describe('PolicyApiService', () => {
     const req = httpMock.expectOne((r) =>
       r.url === BASE_URL &&
       r.params.get('flaggedForReview') === 'true' &&
-      r.params.get('premiumAmount_gte') === '1000' &&
-      r.params.get('premiumAmount_lte') === '9000',
+      r.params.get('premiumMin') === '1000' &&
+      r.params.get('premiumMax') === '9000',
     );
-    expect(req.request.method).toBe('GET');
-    req.flush([]);
+    req.flush({ data: [], total: 0 });
   });
 
   it('getAll() with effective and expiry ranges should map date bound params', () => {
@@ -184,25 +206,46 @@ describe('PolicyApiService', () => {
 
     const req = httpMock.expectOne((r) =>
       r.url === BASE_URL &&
-      r.params.get('effectiveDate_gte') === '2026-01-01' &&
-      r.params.get('effectiveDate_lte') === '2026-03-31' &&
-      r.params.get('expiryDate_gte') === '2026-04-01' &&
-      r.params.get('expiryDate_lte') === '2026-12-31',
+      r.params.get('effectiveDateFrom') === '2026-01-01' &&
+      r.params.get('effectiveDateTo') === '2026-03-31' &&
+      r.params.get('expiryDateFrom') === '2026-04-01' &&
+      r.params.get('expiryDateTo') === '2026-12-31',
     );
-    expect(req.request.method).toBe('GET');
-    req.flush([]);
+    req.flush({ data: [], total: 0 });
   });
 
-  it('getAll() with asc sort should use field name without dash prefix', () => {
-    service
-      .getAll(undefined, { active: 'expiryDate', direction: 'asc' })
-      .subscribe();
+  // -------------------------------------------------------------------------
+  // getSummary
+  // -------------------------------------------------------------------------
+
+  it('getSummary() should GET /policies/summary with the filter params and return aggregates', () => {
+    const summary = {
+      active: 5, pending: 2, expired: 1, cancelled: 0,
+      totalPremium: 9999, expiringWithin30Days: 3, gwpByLob: { Marine: 9999 },
+    };
+
+    service.getSummary({ statuses: ['Active'] }).subscribe((result) => {
+      expect(result).toEqual(summary);
+    });
 
     const req = httpMock.expectOne(
-      (r) => r.url === BASE_URL && r.params.get('_sort') === 'expiryDate',
+      (r) => r.url === `${BASE_URL}/summary` && r.params.get('status') === 'Active',
     );
     expect(req.request.method).toBe('GET');
-    req.flush([]);
+    req.flush(summary);
+  });
+
+  it('getSummary() should NOT send pagination or sort params', () => {
+    service.getSummary({ search: 'x' }).subscribe();
+
+    const req = httpMock.expectOne((r) => r.url === `${BASE_URL}/summary`);
+    expect(req.request.params.get('page')).toBeNull();
+    expect(req.request.params.get('pageSize')).toBeNull();
+    expect(req.request.params.get('sort')).toBeNull();
+    req.flush({
+      active: 0, pending: 0, expired: 0, cancelled: 0,
+      totalPremium: 0, expiringWithin30Days: 0, gwpByLob: {},
+    });
   });
 
   // -------------------------------------------------------------------------

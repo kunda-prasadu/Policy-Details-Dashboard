@@ -26,6 +26,8 @@ This document records every significant architectural and technical decision mad
 
 **Reason:** Zone.js patches ~30 browser APIs and adds ~30 kB to the initial bundle. Zoneless + signals gives deterministic, explicit change propagation. Every state mutation is visible in the signal write — no hidden `markForCheck()` calls or `NgZone.run()` wrappers needed.
 
+**Tests mirror production:** Zone.js is also excluded from the Karma bundle (`src/test.ts` is empty of zone imports). Specs provide `provideZonelessChangeDetection()` and drive change detection via `fixture.detectChanges()` / `await fixture.whenStable()`; the few timer-based assertions use `jasmine.clock()` rather than `fakeAsync()`/`tick()` (which require Zone.js). This removes the `NG0914 "still loading Zone.js"` warning and guarantees tests exercise the same scheduler as production.
+
 ---
 
 ## DD-003 · Signal-Based Custom Store (no NgRx / NGXS)
@@ -148,50 +150,62 @@ This document records every significant architectural and technical decision mad
 
 ---
 
-## DD-013 · Mock API via `json-server` (Not In-Memory Web API)
+## DD-013 · Mock API via a Custom Express Server (Not `json-server`)
 
-**Decision:** `json-server` serves `mock-api/db.json` as a REST API on port 3000.
+**Decision:** A small custom Express server (`mock-api/server.js`, ~170 lines) serves `mock-api/db.json` as a REST API on port 3000. It implements `GET /policies` (filter + OR-search + sort + pagination, returning a `{ data, total }` envelope), `GET /policies/summary` (KPI aggregates over the filtered set), `GET /policies/:id`, and `PATCH /policies/:id`.
 
 **Alternatives Considered:**
-- `@angular/in-memory-web-api` (intercepts HttpClient at the Angular layer)
+- `json-server` (the original approach)
+- `@angular/in-memory-web-api`
 - MSW (Mock Service Worker)
 
-**Reason:** `json-server` is a real HTTP server — it exercises the full network stack, CORS handling, and HTTP status codes that the app will encounter with the real backend. `in-memory-web-api` bypasses the network entirely, hiding real HTTP concerns. MSW is more powerful but adds configuration complexity for a project at this stage. `json-server` also supports the `X-Total-Count` header needed for server-side pagination out of the box.
+**Reason:** The dashboard requires **true server-side filtering, free-text search, sorting, pagination AND a server-computed summary**. `json-server` cannot express a free-text OR across three specific fields — repeating `policyNumber_like`/`policyHolderName_like`/`underwriter_like` is ANDed, which returns near-empty results (a latent bug in the original implementation). It also has no concept of a domain "summary" endpoint. A custom Express server gives exact control over the contract the Angular client depends on, with Express already present as an SSR dependency (no new package). PATCH mutations are intentionally held in memory so the seed file stays pristine in git. The server is a real HTTP server, so it still exercises the network stack, CORS and HTTP status codes that the real backend will.
 
 ---
 
-## DD-014 · `_pageIndex` / `_pageSize` as Signals in `PolicyTable`
+## DD-014 · Server-Side Pagination with a Controlled `MatPaginator`
 
-**Decision:** Pagination state is tracked in two `WritableSignal<number>` values (`_pageIndex`, `_pageSize`) rather than reading `MatTableDataSource.filteredData` or `dataSource.paginator.pageIndex` directly inside computed signals.
+**Decision:** The store holds only the **current page** of policies plus the server's `total`. The `MatPaginator` is a controlled component bound to store signals (`[length]="store.total()"`, `[pageIndex]`, `[pageSize]`) with its `(page)` event calling `store.setPage()`. It is NOT attached to `MatTableDataSource`. `pageIds` is derived directly from `store.policies()` (the page itself).
 
 **Alternatives Considered:**
-- Reading `dataSource.filteredData.length` in a `computed()` to derive the current page slice
-- Reading `dataSource.paginator?.pageIndex` directly in `isAllOnPageSelected`
+- Fetching all matching records and paginating client-side via `dataSource.paginator`
+- Tracking `_pageIndex`/`_pageSize` signals locally in the component and slicing the full set
 
-**Reason:** `MatTableDataSource` updates `filteredData` asynchronously via its internal RxJS pipeline. Reading it synchronously inside a `computed()` or `effect()` returns stale (often empty) data. `isAllOnPageSelected` would always evaluate to `false` because `pageIds` would slice an empty array. Tracking page state in signals that are updated synchronously in the `paginator.page` subscription — and deriving `pageIds` from `store.filteredPolicies()` (a synchronous signal) — fixes this category of bug entirely.
+**Reason:** Loading the full result set into the client defeats the point of server-side filtering and does not scale past the seed data. With the page as the only client-held data, `pageIds` (used by the "select all on page" checkbox) is trivially `store.policies().map(p => p.id)` — no async `MatTableDataSource.filteredData` staleness to work around. `setPage()` persists the chosen page size to `localStorage` and is a no-op when page index and size are unchanged, avoiding redundant requests.
+
+---
+
+## DD-014a · Server-Computed Summary (`GET /policies/summary`)
+
+**Decision:** The KPI summary (status counts, total premium, expiring-within-30-days, GWP by LOB) is fetched from a dedicated endpoint and stored in a `_summary` signal, loaded alongside the page via `forkJoin` in `loadPolicies()`.
+
+**Alternatives Considered:**
+- Computing the summary client-side from the loaded policies (the original approach)
+
+**Reason:** Once pagination is server-side the client only holds one page, so it can no longer aggregate across the whole filtered set. The server computes the aggregates over the same filter criteria, keeping the KPI cards correct regardless of which page is displayed. `forkJoin` guarantees the table and the summary always reflect the same filter state (they update together or not at all).
 
 ---
 
 ## DD-015 · Server-Side Sort in `PolicyTable` (No `dataSource.sort` Assignment)
 
-**Decision:** `MatSort` events are forwarded to `store.updateSort()` instead of assigning `matSort` to `dataSource.sort`.
+**Decision:** `MatSort`'s `(matSortChange)` event is forwarded to `store.updateSort()` instead of assigning `matSort` to `dataSource.sort`.
 
 **Alternatives Considered:**
 - `dataSource.sort = this.sortRef()!` — standard client-side sort approach
 
-**Reason:** Assigning `dataSource.sort` causes `MatTableDataSource` to sort the local data array client-side. For a dashboard that calls the API on every sort change (to maintain consistent server-driven ordering), this would produce a double-sort: the API returns data sorted by the new field, and `MatTableDataSource` re-sorts the same data locally, potentially producing a different order if the sort fields contain equal values. Server-only sort (via `store.updateSort()`) ensures a single, deterministic sort source.
+**Reason:** Assigning `dataSource.sort` would sort the local page client-side, conflicting with the server ordering and producing a double-sort. Forwarding to `store.updateSort()` (which resets to page 0 and refetches) keeps a single, deterministic, server-driven sort source.
 
 ---
 
 ## DD-016 · Two `formValueChanges` Subscriptions in `PolicyFilter`
 
-**Decision:** `PolicyFilter` subscribes to `form.valueChanges` twice: once with no debounce (immediate store update) and once with `debounceTime(400)` (localStorage + URL sync).
+**Decision:** `PolicyFilter` subscribes to `form.valueChanges` twice: once with no debounce (updates the local chip/count snapshot only) and once with `debounceTime(400)` (store fetch + localStorage + URL sync).
 
 **Alternatives Considered:**
-- Single subscription that debounces all three side-effects together
-- `switchMap` with conditional delay based on which control changed
+- Single subscription that debounces everything together
+- No debounce on the store update (the original approach, when filtering was client-side)
 
-**Reason:** Store updates must be immediate for responsive table filtering — the data is local (`json-server` or in-memory), so there is no network cost to updating on every keystroke. URL and localStorage writes are debounced to: (a) prevent the browser history stack from gaining one entry per character typed, and (b) reduce localStorage I/O from O(keystrokes) to O(typing pauses). The two-subscription pattern is explicit and easier to audit than a single stream with conditional delays.
+**Reason:** Now that filtering/search/sort are **server-side**, every `store.updateFilters()` triggers an HTTP request — firing one per keystroke would hammer the API. The store fetch, localStorage write and URL replace are therefore all debounced (400 ms): this coalesces rapid typing into one request, prevents a browser-history entry per character, and reduces localStorage I/O to O(typing pauses). The immediate subscription is kept only for the chip/count badge, which is pure local UI with no I/O and benefits from instant feedback.
 
 ---
 
@@ -228,7 +242,7 @@ This document records every significant architectural and technical decision mad
 - `Date` objects in `PolicyFilter`
 - Unix timestamp numbers
 
-**Reason:** `PolicyFilter` is serialised to both `localStorage` (via `JSON.stringify`) and URL query params. `Date` objects do not survive `JSON.stringify` round-trips (they become ISO strings with time components, then fail `new Date()` parsing on deserialisation). `YYYY-MM-DD` ISO strings are naturally sortable lexicographically, making the filter predicate in `filteredPolicies` a simple string comparison — no `Date` object allocation per row per filter evaluation.
+**Reason:** `PolicyFilter` is serialised to both `localStorage` (via `JSON.stringify`) and URL query params. `Date` objects do not survive `JSON.stringify` round-trips (they become ISO strings with time components, then fail `new Date()` parsing on deserialisation). `YYYY-MM-DD` ISO strings are naturally sortable lexicographically, so the server-side date-range predicate is a simple string comparison — no `Date` object allocation per row. (Filtering now runs server-side; the ISO-string choice still matters for clean localStorage/URL round-tripping.)
 
 ---
 

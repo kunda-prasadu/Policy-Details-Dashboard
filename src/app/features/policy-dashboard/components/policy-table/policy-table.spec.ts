@@ -25,6 +25,7 @@ import { of } from 'rxjs';
 import { PolicyTable } from './policy-table';
 import { PolicyStore } from '../../store/policy.store';
 import { PolicyApiService } from '../../services/policy-api.service';
+import { pageOf, summaryOf } from '../../testing/policy-test-utils';
 import { Policy } from '../../models/policy.model';
 
 // ---------------------------------------------------------------------------
@@ -61,9 +62,10 @@ describe('PolicyTable', () => {
 
   beforeEach(async () => {
     apiSpy = jasmine.createSpyObj<PolicyApiService>('PolicyApiService', [
-      'getAll', 'patch', 'flagPolicy', 'flagPolicies',
+      'getAll', 'getSummary', 'patch', 'flagPolicy', 'flagPolicies',
     ]);
-    apiSpy.getAll.and.returnValue(of([]));
+    apiSpy.getAll.and.returnValue(pageOf([]));
+    apiSpy.getSummary.and.returnValue(summaryOf());
 
     await TestBed.configureTestingModule({
       imports: [PolicyTable],
@@ -138,7 +140,7 @@ describe('PolicyTable', () => {
       makePolicy({ id: 'b' }),
       makePolicy({ id: 'c' }),
     ];
-    apiSpy.getAll.and.returnValue(of(policies));
+    apiSpy.getAll.and.returnValue(pageOf(policies));
     store.loadPolicies();
     fixture.detectChanges();
 
@@ -156,7 +158,7 @@ describe('PolicyTable', () => {
 
   it('toggleSelectAll() should clear selection when all page items are already selected', () => {
     const policies = [makePolicy({ id: 'a' }), makePolicy({ id: 'b' })];
-    apiSpy.getAll.and.returnValue(of(policies));
+    apiSpy.getAll.and.returnValue(pageOf(policies));
     store.loadPolicies();
     fixture.detectChanges();
 
@@ -173,9 +175,9 @@ describe('PolicyTable', () => {
   // dataSource
   // -------------------------------------------------------------------------
 
-  it('dataSource should update when store filteredPolicies changes', () => {
+  it('dataSource should update when the store page (store.policies) changes', () => {
     const policies = [makePolicy({ id: 'x' }), makePolicy({ id: 'y' })];
-    apiSpy.getAll.and.returnValue(of(policies));
+    apiSpy.getAll.and.returnValue(pageOf(policies));
     store.loadPolicies();
     fixture.detectChanges();
 

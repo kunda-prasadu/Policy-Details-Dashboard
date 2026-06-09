@@ -14,6 +14,8 @@ import { catchError, tap } from 'rxjs/operators';
 import { environment } from '../../../../environments/environment';
 import { LoggerService } from '../../../core/services/logger.service';
 import { PolicyFilter } from '../models/policy-filter.model';
+import { PageRequest, PolicyPage } from '../models/pagination.model';
+import { PolicySummaryData } from '../models/policy-summary.model';
 import { Policy } from '../models/policy.model';
 
 // ---------------------------------------------------------------------------
@@ -60,115 +62,130 @@ export class PolicyApiService {
   // ---------------------------------------------------------------------------
 
   /**
-   * Fetches all policies matching the given filters and sort, up to the
-   * server-side maximum of 250 records.
+   * Builds the HTTP query params for the shared FILTER surface used by both
+   * `getAll` and `getSummary`.
    *
-   * WHY _limit=250: json-server returns 10 records by default. Setting a high
-   * limit here ensures the store receives all records in a single round-trip,
-   * which the client-side computed signal then paginates in memory. A future
-   * iteration can switch to true server-side pagination by removing this limit
-   * and passing _page/_limit from the store's PaginationState.
+   * WHY EXTRACTED: The filter contract (search + multi-value + ranges) is
+   * identical for the list endpoint and the summary endpoint. Centralising it
+   * here keeps the two methods in lock-step — a new filter field is wired once.
    *
-   * WHY SERVER-SIDE FILTER PARAMS: Offloading status/region/LOB filtering to
-   * json-server reduces the payload size — fetching 250 unfiltered records and
-   * then filtering in memory is wasteful when json-server can do the same with
-   * a query param. Free-text search (q=) is also server-side for the same reason.
-   *
-   * @param filters - Optional filter criteria mapped to json-server query params.
-   * @param sort    - Optional sort state mapped to _sort/_order params.
-   * @returns Observable emitting the array of matching Policy records.
+   * WHY THESE PARAM NAMES: They mirror the mock server's query contract
+   * (`search`, repeated `status`/`region`/`lineOfBusiness`/`currency`,
+   * `premiumMin`/`premiumMax`, `*DateFrom`/`*DateTo`). The server performs an OR
+   * free-text search across policyNumber/policyHolderName/underwriter from the
+   * single `search` param — fixing the previous bug where three ANDed `_like`
+   * params could never match.
    */
-  getAll(filters?: PolicyFilter, sort?: PolicySort): Observable<Policy[]> {
-    // WHY THIS APPROACH: HttpParams is immutable — each .set()/.append() returns
-    // a new instance. Building via a chain avoids mutating a shared params object
-    // across concurrent calls.
-    //
-    // WHY _per_page NOT _limit: json-server v1 beta (^1.0.0-beta.x) changed the
-    // pagination API. `_limit` was silently ignored (returns empty array), replaced
-    // by `_per_page`. Using 250 fetches all records in a single round-trip so the
-    // store can paginate and filter in memory via computed signals.
-    let params = new HttpParams().set('_per_page', '250');
+  private buildFilterParams(filters?: PolicyFilter): HttpParams {
+    // HttpParams is immutable — each set()/append() returns a new instance.
+    let params = new HttpParams();
+    if (!filters) return params;
 
-    if (filters) {
-      // Free-text search across the required fields.
-      if (filters.search?.trim()) {
-        const term = filters.search.trim();
-        params = params
-          .set('policyNumber_like', term)
-          .set('policyHolderName_like', term)
-          .set('underwriter_like', term);
-      }
-
-      if (filters.statuses?.length) {
-        for (const status of filters.statuses) {
-          params = params.append('status', status);
-        }
-      }
-
-      if (filters.regions?.length) {
-        for (const region of filters.regions) {
-          params = params.append('region', region);
-        }
-      }
-
-      if (filters.linesOfBusiness?.length) {
-        for (const lob of filters.linesOfBusiness) {
-          params = params.append('lineOfBusiness', lob);
-        }
-      }
-
-      if (filters.currencies?.length) {
-        for (const currency of filters.currencies) {
-          params = params.append('currency', currency);
-        }
-      }
-
-      // flaggedForReview: json-server matches boolean fields directly
-      if (filters.flaggedForReview === true) {
-        params = params.set('flaggedForReview', 'true');
-      }
-
-      // Premium range: json-server operator-suffix params
-      if (filters.premiumMin !== undefined) {
-        params = params.set('premiumAmount_gte', filters.premiumMin.toString());
-      }
-      if (filters.premiumMax !== undefined) {
-        params = params.set('premiumAmount_lte', filters.premiumMax.toString());
-      }
-
-      if (filters.effectiveDateFrom) {
-        params = params.set('effectiveDate_gte', filters.effectiveDateFrom);
-      }
-      if (filters.effectiveDateTo) {
-        params = params.set('effectiveDate_lte', filters.effectiveDateTo);
-      }
-      if (filters.expiryDateFrom) {
-        params = params.set('expiryDate_gte', filters.expiryDateFrom);
-      }
-      if (filters.expiryDateTo) {
-        params = params.set('expiryDate_lte', filters.expiryDateTo);
-      }
+    if (filters.search?.trim()) {
+      params = params.set('search', filters.search.trim());
     }
 
+    for (const status of filters.statuses ?? []) {
+      params = params.append('status', status);
+    }
+    for (const region of filters.regions ?? []) {
+      params = params.append('region', region);
+    }
+    for (const lob of filters.linesOfBusiness ?? []) {
+      params = params.append('lineOfBusiness', lob);
+    }
+    for (const currency of filters.currencies ?? []) {
+      params = params.append('currency', currency);
+    }
+
+    if (filters.flaggedForReview === true) {
+      params = params.set('flaggedForReview', 'true');
+    }
+
+    if (filters.premiumMin !== undefined) {
+      params = params.set('premiumMin', filters.premiumMin.toString());
+    }
+    if (filters.premiumMax !== undefined) {
+      params = params.set('premiumMax', filters.premiumMax.toString());
+    }
+
+    if (filters.effectiveDateFrom) {
+      params = params.set('effectiveDateFrom', filters.effectiveDateFrom);
+    }
+    if (filters.effectiveDateTo) {
+      params = params.set('effectiveDateTo', filters.effectiveDateTo);
+    }
+    if (filters.expiryDateFrom) {
+      params = params.set('expiryDateFrom', filters.expiryDateFrom);
+    }
+    if (filters.expiryDateTo) {
+      params = params.set('expiryDateTo', filters.expiryDateTo);
+    }
+
+    return params;
+  }
+
+  /**
+   * Fetches ONE page of policies matching the given filters and sort.
+   *
+   * Filtering, free-text search, sorting AND pagination are ALL performed
+   * server-side — the response contains only the requested page plus the total
+   * count of matching records. The client never holds the full dataset.
+   *
+   * @param filters    - Optional filter criteria (shared with getSummary).
+   * @param sort       - Optional sort state mapped to `sort`/`order` params.
+   * @param pagination - Optional zero-based pageIndex + pageSize. Omitted →
+   *                     server returns all matching records (used by drilldowns).
+   * @returns Observable emitting `{ data, total }`.
+   */
+  getAll(
+    filters?: PolicyFilter,
+    sort?: PolicySort,
+    pagination?: PageRequest,
+  ): Observable<PolicyPage<Policy>> {
+    let params = this.buildFilterParams(filters);
+
     if (sort?.active && sort.direction) {
-      // WHY PREFIX DASH FOR DESC: json-server v1 beta changed sort syntax.
-      // v0 used `_sort=field&_order=desc`; v1 uses `_sort=-field` for descending
-      // and `_sort=field` (no prefix) for ascending. The `_order` param is ignored.
-      const sortValue =
-        sort.direction === 'desc' ? `-${sort.active}` : sort.active;
-      params = params.set('_sort', sortValue);
+      params = params.set('sort', sort.active).set('order', sort.direction);
+    }
+
+    if (pagination) {
+      // Server uses 1-based page numbers; MatPaginator is 0-based.
+      params = params
+        .set('page', (pagination.pageIndex + 1).toString())
+        .set('pageSize', pagination.pageSize.toString());
     }
 
     this.logger.debug('PolicyApiService.getAll()', { params: params.toString() });
 
-    // RxJS pipe:
-    // tap(...)      — logs the number of records received for diagnostic purposes
-    // (no catchError here — errorInterceptor handles all HTTP errors upstream)
-    return this.http.get<Policy[]>(this.baseUrl, { params }).pipe(
-      tap((policies) =>
-        this.logger.debug(`PolicyApiService.getAll() → ${policies.length} records`),
+    // No catchError here — errorInterceptor normalises all HTTP errors upstream.
+    return this.http.get<PolicyPage<Policy>>(this.baseUrl, { params }).pipe(
+      tap((page) =>
+        this.logger.debug(
+          `PolicyApiService.getAll() → page of ${page.data.length} / ${page.total} total`,
+        ),
       ),
     );
+  }
+
+  /**
+   * Fetches the KPI summary aggregated SERVER-SIDE over the filtered set.
+   *
+   * WHY A SEPARATE ENDPOINT: With server-side pagination the client only holds
+   * one page, so it cannot compute counts/premiums across the whole filtered
+   * dataset. The server aggregates over the same filter criteria and returns
+   * the totals — keeping the KPI cards correct on every page.
+   *
+   * @param filters - Filter criteria (identical contract to getAll).
+   * @returns Observable emitting the aggregated PolicySummaryData.
+   */
+  getSummary(filters?: PolicyFilter): Observable<PolicySummaryData> {
+    const params = this.buildFilterParams(filters);
+    this.logger.debug('PolicyApiService.getSummary()', { params: params.toString() });
+
+    return this.http
+      .get<PolicySummaryData>(`${this.baseUrl}/summary`, { params })
+      .pipe(tap(() => this.logger.debug('PolicyApiService.getSummary() → ok')));
   }
 
   // ---------------------------------------------------------------------------

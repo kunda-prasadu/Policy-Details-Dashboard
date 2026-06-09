@@ -8,7 +8,7 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "serve:ssr:policy-dashboard": "node dist/policy-dashboard/server/server.mjs",
-    "start:api": "json-server mock-api/db.json --port 3000",
+    "start:api": "node mock-api/server.js",
     "generate:mock": "node mock-api/generate-data.js",
     "lint": "ng lint"
   },

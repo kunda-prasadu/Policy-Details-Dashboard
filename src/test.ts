@@ -1,19 +1,16 @@
 /**
  * @fileoverview Karma test entry point.
  *
- * WHY ZONE.JS + ZONE.JS/TESTING: This app uses provideZonelessChangeDetection()
- * in production, but Angular's fakeAsync() test helper requires zone.js to be
- * loaded first, followed by zone.js/testing (which patches zone.js to support
- * fakeAsync, tick, and discardPeriodicTasks). Importing both here makes the
- * full fakeAsync API available to all spec files.
+ * WHY NO ZONE.JS: The application runs fully zoneless
+ * (provideZonelessChangeDetection()) and Zone.js is absent from the build
+ * polyfills. The test suite mirrors production exactly: every spec provides
+ * provideZonelessChangeDetection() in its TestBed and drives change detection
+ * explicitly via fixture.detectChanges() / await fixture.whenStable().
  *
- * WHY ZONE.JS IS SAFE IN TESTS: Loading zone.js in the test bundle does not
- * conflict with provideZonelessChangeDetection() — that provider selects the
- * Angular scheduler, not whether zone.js is present. Tests that explicitly
- * provide provideZonelessChangeDetection() continue to use the zoneless path.
+ * Asynchrony is handled with native async/await over real microtasks rather
+ * than fakeAsync()/tick() (which require Zone.js). Keeping Zone.js out of the
+ * test bundle means tests exercise the same scheduler as production and removes
+ * the NG0914 "still loading Zone.js" warning.
  */
 
-// Load the base zone.js runtime (required by zone.js/testing).
-import 'zone.js';
-// Required for fakeAsync() and tick() in all spec files.
-import 'zone.js/testing';
+export {};

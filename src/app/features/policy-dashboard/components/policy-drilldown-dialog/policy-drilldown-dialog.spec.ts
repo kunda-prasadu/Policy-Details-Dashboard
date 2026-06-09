@@ -30,6 +30,7 @@ import {
 } from './policy-drilldown-dialog';
 import { PolicyStore } from '../../store/policy.store';
 import { PolicyApiService } from '../../services/policy-api.service';
+import { pageOf, summaryOf } from '../../testing/policy-test-utils';
 import { Policy } from '../../models/policy.model';
 
 // ---------------------------------------------------------------------------
@@ -97,9 +98,10 @@ describe('PolicyDrilldownDialog', () => {
 
   beforeEach(() => {
     apiSpy = jasmine.createSpyObj<PolicyApiService>('PolicyApiService', [
-      'getAll', 'patch', 'flagPolicy', 'flagPolicies',
+      'getAll', 'getSummary', 'patch', 'flagPolicy', 'flagPolicies',
     ]);
-    apiSpy.getAll.and.returnValue(of([]));
+    apiSpy.getAll.and.returnValue(pageOf([]));
+    apiSpy.getSummary.and.returnValue(summaryOf());
   });
 
   afterEach(() => {
@@ -138,7 +140,7 @@ describe('PolicyDrilldownDialog', () => {
       // WHY NO tick(): of() emits synchronously — store operations resolve
       // immediately without needing fake timer flush.
       const expired = makePolicy({ id: 'det-2', status: 'Expired' });
-      apiSpy.getAll.and.returnValue(of([expired]));
+      apiSpy.getAll.and.returnValue(pageOf([expired]));
       apiSpy.patch.and.returnValue(of({ ...expired, status: 'Active' }));
 
       const fixture = await createDialogFixture(
@@ -184,18 +186,20 @@ describe('PolicyDrilldownDialog', () => {
       expect(fixture.componentInstance).toBeTruthy();
     });
 
-    it('listPolicies should return policies matching the given status', async () => {
+    it('listPolicies should fetch the status-filtered set from the API', async () => {
+      // The dialog issues its OWN server-side request scoped to the status; the
+      // server returns only matching records (no client-side filtering).
       const active = makePolicy({ id: 'a1', status: 'Active' });
-      const pending = makePolicy({ id: 'p1', status: 'Pending' });
-      apiSpy.getAll.and.returnValue(of([active, pending]));
+      apiSpy.getAll.and.returnValue(pageOf([active]));
 
       const fixture = await createDialogFixture(
         { mode: 'status', status: 'Active' },
         apiSpy,
       );
-      const store = TestBed.inject(PolicyStore);
-      store.loadPolicies();
 
+      // getAll was called with a filter narrowed to the Active status.
+      const filterArg = apiSpy.getAll.calls.mostRecent().args[0];
+      expect(filterArg?.statuses).toEqual(['Active']);
       expect(fixture.componentInstance.listPolicies().length).toBe(1);
       expect(fixture.componentInstance.listPolicies()[0].id).toBe('a1');
     });
@@ -312,7 +316,7 @@ describe('PolicyDrilldownDialog', () => {
     it('should add policy id to renewingIds immediately', async () => {
       const p = makePolicy({ id: 'ren-1' });
       apiSpy.patch.and.returnValue(of({ ...p, status: 'Active' }));
-      apiSpy.getAll.and.returnValue(of([p]));
+      apiSpy.getAll.and.returnValue(pageOf([p]));
 
       const fixture = await createDialogFixture(
         { mode: 'detail', policy: p },
@@ -327,7 +331,7 @@ describe('PolicyDrilldownDialog', () => {
     it('should remove id from renewingIds after 1500ms', async () => {
       const p = makePolicy({ id: 'ren-2' });
       apiSpy.patch.and.returnValue(of({ ...p, status: 'Active' }));
-      apiSpy.getAll.and.returnValue(of([p]));
+      apiSpy.getAll.and.returnValue(pageOf([p]));
 
       const fixture = await createDialogFixture(
         { mode: 'detail', policy: p },
@@ -348,7 +352,7 @@ describe('PolicyDrilldownDialog', () => {
 
     it('should call store.renewPolicy with the given id', async () => {
       const p = makePolicy({ id: 'ren-3' });
-      apiSpy.getAll.and.returnValue(of([p]));
+      apiSpy.getAll.and.returnValue(pageOf([p]));
       apiSpy.patch.and.returnValue(of({ ...p, status: 'Active' }));
 
       const fixture = await createDialogFixture(
@@ -374,20 +378,21 @@ describe('PolicyDrilldownDialog', () => {
       expect(fixture.componentInstance).toBeTruthy();
     });
 
-    it('listPolicies should include only Active policies expiring within 30 days', async () => {
+    it('should request the expiring window (Active + next 30 days) server-side', async () => {
       const soon = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
         .toISOString()
         .split('T')[0];
       const active = makePolicy({ id: 'exp1', status: 'Active', expiryDate: soon });
-      const notActive = makePolicy({ id: 'exp2', status: 'Expired', expiryDate: soon });
-      const notSoon = makePolicy({ id: 'exp3', status: 'Active', expiryDate: '2032-01-01' });
-
-      apiSpy.getAll.and.returnValue(of([active, notActive, notSoon]));
+      // The server returns the already-filtered expiring set.
+      apiSpy.getAll.and.returnValue(pageOf([active]));
 
       const fixture = await createDialogFixture({ mode: 'expiring' }, apiSpy);
-      const store = TestBed.inject(PolicyStore);
-      store.loadPolicies();
 
+      // The dialog narrowed the request to Active status with an expiry-date window.
+      const filterArg = apiSpy.getAll.calls.mostRecent().args[0];
+      expect(filterArg?.statuses).toEqual(['Active']);
+      expect(filterArg?.expiryDateFrom).toBeTruthy();
+      expect(filterArg?.expiryDateTo).toBeTruthy();
       expect(fixture.componentInstance.listPolicies().length).toBe(1);
       expect(fixture.componentInstance.listPolicies()[0].id).toBe('exp1');
     });

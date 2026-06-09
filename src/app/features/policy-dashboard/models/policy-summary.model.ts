@@ -47,3 +47,49 @@ export interface PolicySummary {
   /** Drives the "Review Required" icon badge in the table row. */
   readonly flaggedForReview: boolean;
 }
+
+/**
+ * Aggregated KPI summary computed SERVER-SIDE over the currently filtered set.
+ *
+ * WHY SERVER-COMPUTED: With true server-side pagination the client only ever
+ * holds a single page of policies, so it cannot aggregate counts/premiums
+ * across the whole filtered dataset. The mock API's `GET /policies/summary`
+ * endpoint returns these aggregates for the same filter criteria, keeping the
+ * KPI cards accurate regardless of which page is being viewed.
+ *
+ * WHY A DEDICATED TYPE (not derived from Policy): Computed aggregations have
+ * their own contract distinct from raw Policy data or filter state.
+ */
+export interface PolicySummaryData {
+  /** Count of policies with status 'Active' in the filtered set. */
+  active: number;
+  /** Count of policies with status 'Pending' in the filtered set. */
+  pending: number;
+  /** Count of policies with status 'Expired' in the filtered set. */
+  expired: number;
+  /** Count of policies with status 'Cancelled' in the filtered set. */
+  cancelled: number;
+  /** Sum of all premiumAmount values across the filtered set. */
+  totalPremium: number;
+  /** Count of Active policies whose expiryDate is within the next 30 days. */
+  expiringWithin30Days: number;
+  /**
+   * Gross Written Premium (GWP) grouped by line of business.
+   * Keys are LineOfBusiness values; values are the sum of premiumAmount.
+   */
+  gwpByLob: Record<string, number>;
+}
+
+/**
+ * Empty summary used as the initial store value before the first load and as a
+ * safe fallback. Exported so the store and tests share one definition.
+ */
+export const EMPTY_SUMMARY: PolicySummaryData = {
+  active: 0,
+  pending: 0,
+  expired: 0,
+  cancelled: 0,
+  totalPremium: 0,
+  expiringWithin30Days: 0,
+  gwpByLob: {},
+};

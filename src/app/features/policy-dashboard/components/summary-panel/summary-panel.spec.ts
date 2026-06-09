@@ -19,34 +19,11 @@ import {
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { MatDialog } from '@angular/material/dialog';
-import { of } from 'rxjs';
 
 import { SummaryPanel } from './summary-panel';
 import { PolicyStore } from '../../store/policy.store';
 import { PolicyApiService } from '../../services/policy-api.service';
-import { Policy } from '../../models/policy.model';
-
-// ---------------------------------------------------------------------------
-// Test data
-// ---------------------------------------------------------------------------
-
-function makePolicy(overrides: Partial<Policy> = {}): Policy {
-  return {
-    id: 'p1',
-    policyNumber: 'POL-000001',
-    policyHolderName: 'Acme Corp',
-    lineOfBusiness: 'Property',
-    status: 'Active',
-    region: 'Singapore',
-    premiumAmount: 100_000,
-    currency: 'SGD',
-    effectiveDate: '2025-01-01',
-    expiryDate: '2030-01-01',
-    underwriter: 'Alice',
-    flaggedForReview: false,
-    ...overrides,
-  };
-}
+import { pageOf, summaryOf } from '../../testing/policy-test-utils';
 
 // ---------------------------------------------------------------------------
 // Suite
@@ -61,9 +38,10 @@ describe('SummaryPanel', () => {
 
   beforeEach(async () => {
     apiSpy = jasmine.createSpyObj<PolicyApiService>('PolicyApiService', [
-      'getAll', 'patch', 'flagPolicy', 'flagPolicies',
+      'getAll', 'getSummary', 'patch', 'flagPolicy', 'flagPolicies',
     ]);
-    apiSpy.getAll.and.returnValue(of([]));
+    apiSpy.getAll.and.returnValue(pageOf([]));
+    apiSpy.getSummary.and.returnValue(summaryOf());
 
     await TestBed.configureTestingModule({
       imports: [SummaryPanel],
@@ -96,15 +74,11 @@ describe('SummaryPanel', () => {
 
   describe('statusCards computed', () => {
     beforeEach(() => {
-      // WHY NO tick(): of() emits synchronously so store.loadPolicies() resolves
-      // immediately — no fake timer flush needed.
-      apiSpy.getAll.and.returnValue(of([
-        makePolicy({ id: '1', status: 'Active' }),
-        makePolicy({ id: '2', status: 'Active' }),
-        makePolicy({ id: '3', status: 'Pending' }),
-        makePolicy({ id: '4', status: 'Expired' }),
-        makePolicy({ id: '5', status: 'Cancelled' }),
-      ]));
+      // Summary is now SERVER-COMPUTED: the panel reads store.summary(), which
+      // is populated from the getSummary() response — not derived from the page.
+      apiSpy.getSummary.and.returnValue(
+        summaryOf({ active: 2, pending: 1, expired: 1, cancelled: 1 }),
+      );
       store.loadPolicies();
       fixture.detectChanges();
     });
@@ -141,25 +115,18 @@ describe('SummaryPanel', () => {
     });
 
     it('arcPercent should be 100 when all active policies expire within 30 days', () => {
-      const soon = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .split('T')[0];
-      apiSpy.getAll.and.returnValue(of([
-        makePolicy({ id: 'a', status: 'Active', expiryDate: soon }),
-      ]));
+      apiSpy.getSummary.and.returnValue(
+        summaryOf({ active: 1, expiringWithin30Days: 1 }),
+      );
       store.loadPolicies();
 
       expect(component['arcPercent']()).toBe(100);
     });
 
     it('arcPercent should be 50 when half of active policies expire within 30 days', () => {
-      const soon = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .split('T')[0];
-      apiSpy.getAll.and.returnValue(of([
-        makePolicy({ id: 'a', status: 'Active', expiryDate: soon }),
-        makePolicy({ id: 'b', status: 'Active', expiryDate: '2035-01-01' }),
-      ]));
+      apiSpy.getSummary.and.returnValue(
+        summaryOf({ active: 2, expiringWithin30Days: 1 }),
+      );
       store.loadPolicies();
 
       expect(component['arcPercent']()).toBe(50);
@@ -177,12 +144,9 @@ describe('SummaryPanel', () => {
     });
 
     it('arcDashOffset should be 0 when 100% of active policies are expiring', () => {
-      const soon = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .split('T')[0];
-      apiSpy.getAll.and.returnValue(of([
-        makePolicy({ id: 'a', status: 'Active', expiryDate: soon }),
-      ]));
+      apiSpy.getSummary.and.returnValue(
+        summaryOf({ active: 1, expiringWithin30Days: 1 }),
+      );
       store.loadPolicies();
 
       expect(component['arcDashOffset']()).toBe(0);
@@ -195,10 +159,9 @@ describe('SummaryPanel', () => {
 
   describe('gwpBars computed', () => {
     beforeEach(() => {
-      apiSpy.getAll.and.returnValue(of([
-        makePolicy({ id: '1', lineOfBusiness: 'Property', premiumAmount: 1_000_000 }),
-        makePolicy({ id: '2', lineOfBusiness: 'Marine', premiumAmount: 500_000 }),
-      ]));
+      apiSpy.getSummary.and.returnValue(
+        summaryOf({ gwpByLob: { Property: 1_000_000, Marine: 500_000 } }),
+      );
       store.loadPolicies();
       fixture.detectChanges();
     });

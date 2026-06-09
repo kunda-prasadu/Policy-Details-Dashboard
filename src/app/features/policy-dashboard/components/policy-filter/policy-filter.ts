@@ -281,31 +281,30 @@ export class PolicyFilter {
       return chips;
     });
 
-    // --- Step 5: Immediate valueChanges → update snapshot + store ------------
+    // --- Step 5: Immediate valueChanges → update the local snapshot ----------
     //
-    // WHY IMMEDIATE (no debounce): The store's filteredPolicies computed runs
-    // client-side on the already-loaded policy array. Updating on every keystroke
-    // gives instant table feedback without extra API calls. The API call in
-    // loadPolicies() is fast (local json-server); for a real backend, add a
-    // separate debounce here for search-term-only changes.
+    // WHY IMMEDIATE: The snapshot only drives the active-filter chips and count
+    // badge — pure local UI with no I/O. Updating it on every keystroke keeps
+    // those indicators responsive. The expensive work (API fetch, storage, URL)
+    // is debounced separately in Step 6.
     this.form.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((val) => {
-        const typed = val as PolicyFilterFormValue;
-        this._formSnapshot.set(typed);
-        this.store.updateFilters(this.mapToStoreFilter(typed));
+        this._formSnapshot.set(val as PolicyFilterFormValue);
       });
 
-    // --- Step 6: Debounced valueChanges → persist + URL sync -----------------
+    // --- Step 6: Debounced valueChanges → store fetch + persist + URL sync ----
     //
-    // WHY SEPARATE DEBOUNCED PIPE: Writing to localStorage and replacing the URL
-    // on every keystroke would cause: (a) excessive localStorage I/O and (b)
-    // a cluttered browser history entry per character. 400 ms is imperceptible
-    // to the user but cuts storage writes by ~10× during a typical search.
+    // WHY DEBOUNCED: Filtering, search and sorting are all SERVER-SIDE — each
+    // store.updateFilters() triggers an HTTP request. Firing one per keystroke
+    // would hammer the API. Debouncing (a) coalesces rapid typing into a single
+    // request, (b) avoids excessive localStorage writes, and (c) prevents a
+    // browser-history entry per character. 400 ms is imperceptible to the user.
     this.form.valueChanges
       .pipe(debounceTime(400), takeUntilDestroyed(this.destroyRef))
       .subscribe((val) => {
         const typed = val as PolicyFilterFormValue;
+        this.store.updateFilters(this.mapToStoreFilter(typed));
         this.storage.set<PolicyFilterFormValue>(FILTER_STORAGE_KEY, typed);
         this.syncUrl(typed);
       });

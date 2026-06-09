@@ -34,7 +34,7 @@
                                       │ REST (JSON)
                                       ▼
                          ┌────────────────────────┐
-                         │  json-server / real API  │
+                         │  Express mock / real API │
                          │  http://localhost:3000   │
                          │  GET /policies           │
                          │  GET /policies/:id       │
@@ -105,6 +105,9 @@ PolicyStore (Injectable, providedIn: 'root')
 │
 ├── Private WritableSignals (state atoms)
 │   ├── _policies            WritableSignal<Policy[]>
+│   ├── _total               WritableSignal<number>          (server match count)
+│   ├── _summary             WritableSignal<PolicySummaryData> (server-computed)
+│   ├── _pagination          WritableSignal<PageRequest>      (pageIndex/pageSize)
 │   ├── _loading             WritableSignal<boolean>
 │   ├── _error               WritableSignal<string | null>
 │   ├── _filters             WritableSignal<PolicyFilter>
@@ -112,65 +115,65 @@ PolicyStore (Injectable, providedIn: 'root')
 │   └── _selectedPolicyIds   WritableSignal<string[]>
 │
 ├── Public ReadonlySignals
-│   ├── policies             _policies.asReadonly()
-│   ├── loading              _loading.asReadonly()
-│   ├── error                _error.asReadonly()
-│   ├── filters              _filters.asReadonly()
-│   ├── sort                 _sort.asReadonly()
-│   └── selectedPolicyIds    _selectedPolicyIds.asReadonly()
+│   ├── policies             _policies.asReadonly()   ← CURRENT PAGE only
+│   ├── total                _total.asReadonly()
+│   ├── summary              _summary.asReadonly()
+│   ├── pagination           _pagination.asReadonly()
+│   ├── loading / error / filters / sort / selectedPolicyIds
 │
 ├── Computed Signals (derived, read-only)
-│   ├── filteredPolicies     client-side multi-value filter over _policies
-│   ├── summary              KPI aggregation (active/pending/expired/cancelled/
-│   │                        totalPremium/expiringWithin30Days/gwpByLob)
 │   ├── selectedCount        selectedPolicyIds().length
-│   ├── hasSelection         selectedCount > 0
-│   └── totalPolicies        filteredPolicies().length
+│   └── hasSelection         selectedCount > 0
 │
 └── Action Methods
-    ├── loadPolicies()        API call → _policies; resets selection + loading
-    ├── updateFilters(patch)  merges patch into _filters, calls loadPolicies()
-    ├── clearFilters()        resets _filters to {}, calls loadPolicies()
-    ├── updateSort(sort)      sets _sort, calls loadPolicies()
-    ├── toggleSelection(id)   adds/removes id from _selectedPolicyIds
-    ├── selectAll(ids[])      sets _selectedPolicyIds to provided ids
-    ├── clearSelection()      empties _selectedPolicyIds
+    ├── loadPolicies()        forkJoin(getAll page, getSummary) → _policies/_total/_summary
+    ├── updateFilters(patch)  merges patch, resets to page 0, reloads
+    ├── clearFilters()        resets _filters to {}, page 0, reloads
+    ├── updateSort(sort)      sets _sort, resets to page 0, reloads
+    ├── setPage(idx, size)    sets _pagination (persists size), reloads
+    ├── toggleSelection(id) / selectAll(ids[]) / clearSelection()
     ├── flagSelectedPolicies() optimistic flag + forkJoin + rollback on error
-    └── renewPolicy(id)       optimistic status patch + rollback on error
+    └── renewPolicy(id)       optimistic status patch + summary refresh + rollback
 ```
 
 Why signals over NgRx:
 - ~300-line store vs. 800+ lines of actions/reducers/selectors/effects
 - No boilerplate, no RxJS streams to manage
 - Native Angular 20 reactivity — no extra dependencies
-- Components bind directly to `store.filteredPolicies()` in templates
+- Components bind directly to `store.policies()` / `store.summary()` in templates
+
+**Server-side, not client-side:** filtering, free-text search, sorting, pagination and the summary are all computed by the API. The store holds only the current page + the server's total + the server summary — it never loads the full dataset.
 
 ---
 
 ## 5. HTTP Layer
 
 ```
-Component → PolicyStore.load() → PolicyApiService.getPolicies(params)
+Component → PolicyStore.loadPolicies()
+                 │  forkJoin
+                 ├── PolicyApiService.getAll(filters, sort, page)  → { data, total }
+                 └── PolicyApiService.getSummary(filters)          → PolicySummaryData
                                          │
-                                  HttpClient.get('/policies', { params })
+                                  HttpClient.get(..., { params })
                                          │
                                   errorInterceptor
-                                  ├── 200 OK  → Observable<Policy[]>
+                                  ├── 200 OK  → typed response
                                   └── 4xx/5xx → throwError(NormalisedHttpError)
 ```
 
-**json-server query mapping:**
+**API query mapping (custom Express server):**
 
-| PolicyQueryParams field | json-server query param | Example |
+| PolicyFilter / page field | query param | Example |
 |---|---|---|
-| `_page` | `_page` | `?_page=1` |
-| `_limit` | `_limit` | `?_limit=25` |
-| `_sort` | `_sort` | `?_sort=expiryDate` |
-| `_order` | `_order` | `?_order=asc` |
-| `q` | `q` | `?q=POL-001` |
-| `status` | `status` | `?status=Active` |
-| `region` | `region` | `?region=Singapore` |
-| `premiumAmount_gte` | `premiumAmount_gte` | `?premiumAmount_gte=50000` |
+| `search` (OR over #, holder, underwriter) | `search` | `?search=POL-001` |
+| `statuses[]` | repeated `status` | `?status=Active&status=Pending` |
+| `regions[]` / `linesOfBusiness[]` / `currencies[]` | repeated | `?region=Singapore` |
+| `premiumMin` / `premiumMax` | `premiumMin` / `premiumMax` | `?premiumMin=50000` |
+| `effectiveDateFrom`/`To`, `expiryDateFrom`/`To` | same names | `?expiryDateTo=2026-12-31` |
+| sort | `sort` + `order` | `?sort=premiumAmount&order=desc` |
+| pagination | `page` (1-based) + `pageSize` | `?page=2&pageSize=25` |
+
+`GET /policies` → `{ data, total }`; `GET /policies/summary` → aggregates over the same filters.
 
 ---
 
@@ -215,8 +218,8 @@ SummaryPanel (KPI cards + widgets)
                                            │
                                  PolicyDrilldownDialog (detail | status | expiring)
                                  ├── mode='detail'  → detailPolicy = computed from store.policies()
-                                 ├── mode='status'  → listPolicies = computed from store.filteredPolicies()
-                                 ├── mode='expiring'→ listPolicies filtered to ≤30d
+                                 ├── mode='status'  → fetches its own status-scoped set via getAll()
+                                 ├── mode='expiring'→ fetches Active + ≤30d window via getAll()
                                  ├── renewingIds = signal<Set<string>>()
                                  ├── renew(id) → store.renewPolicy(id) + 1500ms spinner
                                  └── flagDetail() → store.selectAll([id]) + flagSelectedPolicies()
@@ -228,11 +231,12 @@ BulkActionBar (selection toolbar)
 │
 PolicyTable (mat-table)
 ├── dataSource: MatTableDataSource<Policy>
-│   └── data ← effect(() => store.filteredPolicies())
-├── _pageIndex/_pageSize: WritableSignal  ← paginator.page subscription
-├── pageIds: computed(() => filteredPolicies().slice(page))
+│   └── data ← effect(() => store.policies())   ← current page
+├── paginator: CONTROLLED — [length]=store.total(), [pageIndex]/[pageSize]=store.pagination()
+│   └── (page) → store.setPage(idx, size)        ← server fetch
+├── pageIds: computed(() => store.policies().map(p => p.id))
 ├── isAllOnPageSelected / isSomeOnPageSelected: computed()
-├── Sort: matSort.sortChange → store.updateSort()   [server-side only]
+├── Sort: (matSortChange) → store.updateSort()   [server-side]
 └── output<Policy>() rowClick
 ```
 

@@ -285,3 +285,36 @@ Even though `''` is the only route today, using `loadComponent()` keeps the init
 Lazy chunks: `policy-dashboard` (627 kB), `policy-table` (168 kB), `bulk-action-bar` (49 kB), `empty-state` (6 kB) — all split correctly by `@defer`.
 
 <!-- New sessions will be appended below -->
+
+---
+
+## Session — Move to a fully server-side data architecture + drop Zone.js (2026-06-09)
+
+### Context
+A senior-architect review flagged three things: (1) the "server-side filtering" requirement was only nominally met — the store re-filtered all 250 records client-side, duplicating logic; (2) the server-side free-text search was actually broken (three `*_like` params are ANDed by json-server, so it could never match) and was masked by the client filter; (3) Zone.js was still loaded in the test bundle (NG0914 warning). The owner chose the scope: **full server-side** (filter + search + sort + pagination + summary).
+
+### What I changed
+**`mock-api/server.js` (new, replaces json-server)** — a ~170-line Express server. `GET /policies` does filter + OR-search + sort + pagination and returns `{ data, total }`; `GET /policies/summary` returns KPI aggregates over the filtered set; `PATCH /policies/:id` mutates in memory. `package.json` `start:api` now runs `node mock-api/server.js`.
+
+**`PolicyApiService`** — `getAll()` now returns `Observable<PolicyPage<Policy>>` and takes an optional `PageRequest`; added `getSummary()`. Extracted a shared `buildFilterParams()` so the list and summary endpoints stay in lock-step. Search now maps to a single `search` param (the AND-bug is gone).
+
+**`PolicyStore`** — removed the client-side `filteredPolicies` computed and the client-side `summary` computed. Now holds `_policies` (current page), `_total`, `_summary`, `_pagination`. `loadPolicies()` `forkJoin`s the page + summary so the table and KPIs never desync. Added `setPage()`; `updateFilters/clearFilters/updateSort` reset to page 0. `renewPolicy` refreshes the summary on success.
+
+**`PolicyTable`** — paginator is now a controlled component bound to `store.total()`/`store.pagination()`; `(page)` → `store.setPage()`. Dropped the `MatTableDataSource.paginator` wiring, the `_pageIndex`/`_pageSize` signals, and the `AfterViewInit`/`viewChild` plumbing. `(matSortChange)` → `store.updateSort()`. `pageIds` is now simply the current page's ids.
+
+**`PolicyDrilldownDialog`** — list mode (status/expiring) can no longer read the full set from the store, so it fetches its own scoped, unpaginated set via `getAll()` (Active + 30-day window for expiring).
+
+**`PolicyFilter`** — the store update is now debounced (400 ms) alongside URL/localStorage, since each filter change is a real HTTP request. The immediate subscription now only updates the chip/count UI.
+
+**Zone.js** — emptied `src/test.ts`; converted the 3 specs that used `fakeAsync`/`tick` to synchronous/`jasmine.clock()` style. NG0914 warning gone.
+
+### Decisions I accepted / challenged / overrode
+- **[CHALLENGED] "summary can stay client-side."** Once pagination is server-side the client only holds one page, so a client-side summary would be wrong on every page but the first. Overrode with a dedicated `GET /policies/summary` endpoint loaded via `forkJoin`.
+- **[OVERRODE] Keep json-server.** It can't OR-search three named fields and has no summary concept. Replaced with a custom Express server (Express was already a dependency — no new package).
+- **[ACCEPTED] In-memory PATCH (no disk write).** Keeps the seed `db.json` pristine in git; documented in TRADE_OFFS as known mock behavior.
+- **[ACCEPTED] Drilldown fetches its own data.** The cleanest way to keep it correct without re-introducing a full client dataset.
+
+### Verification
+- `ng build` (browser + SSR): 0 errors. SSR output intact.
+- `ng test`: **155 specs pass, 0 failures, no NG0914 warning.** Updated the api/store/table/summary/dialog/filter specs; added `src/app/features/policy-dashboard/testing/policy-test-utils.ts` (`pageOf`/`summaryOf`) to keep spec setup DRY against the new contract.
+- Manual `curl` smoke test of the Express server confirmed filter + OR-search + sort + pagination + summary responses.

@@ -17,10 +17,12 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
   inject,
   signal,
   LOCALE_ID,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { getCurrencySymbol } from '@angular/common';
 import {
   MAT_DIALOG_DATA,
@@ -34,7 +36,9 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 
 import { Policy, PolicyStatus } from '../../models/policy.model';
+import { PolicyFilter } from '../../models/policy-filter.model';
 import { PolicyStore } from '../../store/policy.store';
+import { PolicyApiService } from '../../services/policy-api.service';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -111,7 +115,61 @@ export class PolicyDrilldownDialog {
   readonly dialogRef = inject<MatDialogRef<PolicyDrilldownDialog>>(MatDialogRef);
 
   protected readonly store = inject(PolicyStore);
+  private readonly api = inject(PolicyApiService);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly locale = inject<string>(LOCALE_ID);
+
+  constructor() {
+    // In list modes, fetch the full drilldown set from the API (server-side
+    // filtering, no page limit). Detail mode reads the single policy from the
+    // store's current page via the detailPolicy computed — no fetch needed.
+    if (this.data.mode !== 'detail') {
+      this.loadListPolicies();
+    }
+  }
+
+  /**
+   * Builds the scoped filter for this drilldown and fetches all matching
+   * policies (no pagination) so the dialog can list the complete set.
+   */
+  private loadListPolicies(): void {
+    const base = this.store.filters();
+    let filter: PolicyFilter;
+
+    if (this.data.mode === 'expiring') {
+      // Active policies whose expiry falls within the next 30 days.
+      const today = new Date();
+      const in30 = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+      filter = {
+        ...base,
+        statuses: ['Active'],
+        expiryDateFrom: this.toIsoDate(today),
+        expiryDateTo: this.toIsoDate(in30),
+      };
+    } else {
+      // mode === 'status' — current filters narrowed to the chosen status.
+      filter = this.data.status
+        ? { ...base, statuses: [this.data.status] }
+        : base;
+    }
+
+    this._listLoading.set(true);
+    this.api
+      .getAll(filter, this.store.sort())
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (page) => {
+          this._listPolicies.set(page.data);
+          this._listLoading.set(false);
+        },
+        error: () => this._listLoading.set(false),
+      });
+  }
+
+  /** Formats a Date as an ISO YYYY-MM-DD string for date-range query params. */
+  private toIsoDate(date: Date): string {
+    return date.toISOString().slice(0, 10);
+  }
 
   // ---------------------------------------------------------------------------
   // Local UI state
@@ -154,29 +212,18 @@ export class PolicyDrilldownDialog {
   /**
    * In list mode: the filtered subset of policies for the dialog's mode.
    *
-   * WHY DERIVED FROM store.filteredPolicies(): The dialog should reflect the
-   * current filter context, not the full unfiltered list. If the user filtered
-   * to "Singapore", the status drilldown should show Singapore Active policies.
+   * WHY FETCHED (not derived from the store): Under server-side pagination the
+   * store holds only the current page, so the dialog cannot derive a full
+   * drilldown list from it. Instead it issues its own scoped API request that
+   * reflects the dashboard's active filters PLUS the drilldown constraint
+   * (status, or the expiring-within-30-days window) with no page limit.
    */
-  readonly listPolicies = computed<Policy[]>(() => {
-    if (this.data.mode === 'detail') return [];
+  private readonly _listPolicies = signal<Policy[]>([]);
+  readonly listPolicies = this._listPolicies.asReadonly();
 
-    const all = this.store.filteredPolicies();
-    const now = Date.now();
-    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-
-    if (this.data.mode === 'expiring') {
-      return all.filter((p) => {
-        const expiryMs = new Date(p.expiryDate).getTime();
-        return p.status === 'Active' && expiryMs >= now && expiryMs <= now + thirtyDaysMs;
-      });
-    }
-
-    // mode === 'status'
-    return this.data.status
-      ? all.filter((p) => p.status === this.data.status)
-      : all;
-  });
+  /** True while the list-mode drilldown query is in flight. */
+  private readonly _listLoading = signal<boolean>(false);
+  readonly listLoading = this._listLoading.asReadonly();
 
   /** Columns for the list-mode mat-table. */
   readonly listColumns = [

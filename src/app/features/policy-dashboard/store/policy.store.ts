@@ -24,44 +24,27 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
+import { forkJoin } from 'rxjs';
 
 import { LoggerService } from '../../../core/services/logger.service';
+import { StorageService } from '../../../core/services/storage.service';
 import { NormalisedHttpError } from '../../../core/interceptors/error.interceptor';
 import { PolicyFilter } from '../models/policy-filter.model';
+import { PageRequest } from '../models/pagination.model';
+import {
+  EMPTY_SUMMARY,
+  PolicySummaryData,
+} from '../models/policy-summary.model';
 import { Policy, PolicyStatus } from '../models/policy.model';
 import { PolicyApiService, PolicySort } from '../services/policy-api.service';
+import { PAGE_SIZE_OPTIONS, PAGE_SIZE_STORAGE_KEY } from '../constants/policy.constants';
 
-// ---------------------------------------------------------------------------
-// Summary type
-// ---------------------------------------------------------------------------
+// Re-exported for backwards compatibility — the canonical definition now lives
+// in the model file so the API service can import it without a circular import.
+export type { PolicySummaryData } from '../models/policy-summary.model';
 
-/**
- * Aggregated KPI summary derived from the currently loaded (and filtered) policies.
- * Consumed by the dashboard summary cards and chart components.
- *
- * WHY A DEDICATED TYPE: Computed aggregations have their own contract — they should
- * not be confused with raw Policy data or filter state. Separating this type also
- * makes it trivial to extend (e.g. add `avgPremium`) without touching the Policy model.
- */
-export interface PolicySummaryData {
-  /** Count of policies with status 'Active'. */
-  active: number;
-  /** Count of policies with status 'Pending'. */
-  pending: number;
-  /** Count of policies with status 'Expired'. */
-  expired: number;
-  /** Count of policies with status 'Cancelled'. */
-  cancelled: number;
-  /** Sum of all premiumAmount values across the filtered set. */
-  totalPremium: number;
-  /** Count of Active policies whose expiryDate is within the next 30 days. */
-  expiringWithin30Days: number;
-  /**
-   * Gross Written Premium (GWP) grouped by line of business.
-   * Keys are LineOfBusiness values; values are sum of premiumAmount.
-   */
-  gwpByLob: Record<string, number>;
-}
+/** Default page size when the user has no persisted preference. */
+const DEFAULT_PAGE_SIZE = 10;
 
 // ---------------------------------------------------------------------------
 // Store
@@ -81,6 +64,7 @@ export interface PolicySummaryData {
 export class PolicyStore {
   private readonly api = inject(PolicyApiService);
   private readonly logger = inject(LoggerService);
+  private readonly storage = inject(StorageService);
   private readonly destroyRef = inject(DestroyRef);
 
   // ---------------------------------------------------------------------------
@@ -88,12 +72,32 @@ export class PolicyStore {
   // ---------------------------------------------------------------------------
 
   /**
-   * The full list of policies returned by the last successful API call.
-   * WHY PRIVATE: External components always read via the public computed signals
-   * (filteredPolicies, etc.). Direct access to the raw list bypasses client-side
-   * filtering and would produce inconsistent UI state.
+   * The CURRENT PAGE of policies returned by the last successful API call.
+   *
+   * WHY ONLY A PAGE (not the full dataset): Filtering, sorting and pagination
+   * are all performed server-side. The client never holds more than `pageSize`
+   * records — this is the core of the server-side architecture.
    */
   private readonly _policies = signal<Policy[]>([]);
+
+  /** Total number of records matching the active filters, across all pages. */
+  private readonly _total = signal<number>(0);
+
+  /**
+   * KPI summary aggregated server-side over the full filtered set.
+   * WHY SERVER-SOURCED: With only one page in memory the client cannot compute
+   * counts/premiums across all matching records — the server does it.
+   */
+  private readonly _summary = signal<PolicySummaryData>(EMPTY_SUMMARY);
+
+  /**
+   * Pagination request state (zero-based pageIndex + pageSize).
+   * pageSize is seeded from the user's persisted preference on construction.
+   */
+  private readonly _pagination = signal<PageRequest>({
+    pageIndex: 0,
+    pageSize: this.resolveInitialPageSize(),
+  });
 
   /** Loading flag — true while an API request is in-flight. */
   private readonly _loading = signal<boolean>(false);
@@ -129,8 +133,17 @@ export class PolicyStore {
   // Public read-only signals
   // ---------------------------------------------------------------------------
 
-  /** Read-only view of the raw (unfiltered) policy list. */
+  /** Read-only view of the current page of policies. */
   readonly policies = this._policies.asReadonly();
+
+  /** Total number of records matching the active filters (drives the paginator). */
+  readonly total = this._total.asReadonly();
+
+  /** Server-computed KPI summary over the filtered set. */
+  readonly summary = this._summary.asReadonly();
+
+  /** Current pagination request state (pageIndex + pageSize). */
+  readonly pagination = this._pagination.asReadonly();
 
   /** True while any async operation is in-flight. */
   readonly loading = this._loading.asReadonly();
@@ -155,144 +168,6 @@ export class PolicyStore {
   // ---------------------------------------------------------------------------
 
   /**
-   * The policy list after applying all active client-side filters.
-   *
-   * WHY THIS LIVES HERE (not in the component): Filtering is a business-logic
-   * concern, not a presentation concern. Centralising it in the store means
-   * every component that renders a policy list (table, map, chart) derives from
-   * the same filtered set automatically.
-   *
-   * WHY `?? []` GUARD: The signal is initialised to [] but TypeScript's strict
-   * mode requires a null-safe access; the guard also protects against any future
-   * refactor that makes the signal nullable.
-   */
-  readonly filteredPolicies = computed<Policy[]>(() => {
-    const all = this._policies() ?? [];
-    const f = this._filters();
-
-    // WHY EARLY RETURN: If no filters are active, skip all predicate evaluation
-    // and return the reference directly — avoids allocating a new array on every
-    // signal read when nothing has changed.
-    const hasFilters =
-      f.search ||
-      f.statuses?.length ||
-      f.regions?.length ||
-      f.linesOfBusiness?.length ||
-      f.currencies?.length ||
-      f.flaggedForReview !== undefined ||
-      f.premiumMin !== undefined ||
-      f.premiumMax !== undefined ||
-      f.effectiveDateFrom !== undefined ||
-      f.effectiveDateTo !== undefined ||
-      f.expiryDateFrom !== undefined ||
-      f.expiryDateTo !== undefined;
-
-    if (!hasFilters) {
-      return all;
-    }
-
-    return all.filter((p) => {
-      // Free-text: case-insensitive substring match on number and name
-      if (f.search?.trim()) {
-        const term = f.search.trim().toLowerCase();
-        const matchesSearch =
-          p.policyNumber.toLowerCase().includes(term) ||
-          p.policyHolderName.toLowerCase().includes(term) ||
-          p.underwriter.toLowerCase().includes(term);
-        if (!matchesSearch) return false;
-      }
-
-      // Multi-status filter (client-side for >1 selection)
-      if (f.statuses?.length && !f.statuses.includes(p.status)) return false;
-
-      // Multi-region filter
-      if (f.regions?.length && !f.regions.includes(p.region)) return false;
-
-      // Multi-LOB filter
-      if (f.linesOfBusiness?.length && !f.linesOfBusiness.includes(p.lineOfBusiness))
-        return false;
-
-      // Multi-currency filter
-      if (f.currencies?.length && !f.currencies.includes(p.currency)) return false;
-
-      // Boolean flag filter
-      if (f.flaggedForReview === true && !p.flaggedForReview) return false;
-
-      // Premium range filter
-      if (f.premiumMin !== undefined && p.premiumAmount < f.premiumMin) return false;
-      if (f.premiumMax !== undefined && p.premiumAmount > f.premiumMax) return false;
-
-      // Effective date range filter
-      // WHY STRING COMPARISON: effectiveDate is stored as ISO 8601 (YYYY-MM-DD).
-      // Lexicographic string comparison is equivalent to chronological order for
-      // that format, avoiding Date object allocation on every row evaluation.
-      if (f.effectiveDateFrom && p.effectiveDate < f.effectiveDateFrom) return false;
-      if (f.effectiveDateTo && p.effectiveDate > f.effectiveDateTo) return false;
-
-      // Expiry date range filter
-      if (f.expiryDateFrom && p.expiryDate < f.expiryDateFrom) return false;
-      if (f.expiryDateTo && p.expiryDate > f.expiryDateTo) return false;
-
-      return true;
-    });
-  });
-
-  /**
-   * Aggregated KPI summary derived from the filtered policy list.
-   *
-   * WHY DERIVED FROM filteredPolicies (not _policies): Summary cards should
-   * reflect the current filter context — when a user filters to Singapore only,
-   * the KPI cards should show Singapore totals, not global totals.
-   */
-  readonly summary = computed<PolicySummaryData>(() => {
-    const policies = this.filteredPolicies();
-
-    // Precompute today's date once outside the reduce loop — avoids creating
-    // a Date object on every iteration for the expiringWithin30Days check.
-    const now = Date.now();
-    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-
-    return policies.reduce<PolicySummaryData>(
-      (acc, p) => {
-        // Status counts
-        const statusKey = p.status.toLowerCase() as keyof Pick<
-          PolicySummaryData,
-          'active' | 'pending' | 'expired' | 'cancelled'
-        >;
-        if (statusKey in acc) {
-          (acc[statusKey] as number)++;
-        }
-
-        // Total premium
-        acc.totalPremium += p.premiumAmount;
-
-        // Expiring within 30 days: Active policies only, expiry in [now, now+30d]
-        if (p.status === 'Active') {
-          const expiryMs = new Date(p.expiryDate).getTime();
-          if (expiryMs >= now && expiryMs <= now + thirtyDaysMs) {
-            acc.expiringWithin30Days++;
-          }
-        }
-
-        // GWP by line of business
-        acc.gwpByLob[p.lineOfBusiness] =
-          (acc.gwpByLob[p.lineOfBusiness] ?? 0) + p.premiumAmount;
-
-        return acc;
-      },
-      {
-        active: 0,
-        pending: 0,
-        expired: 0,
-        cancelled: 0,
-        totalPremium: 0,
-        expiringWithin30Days: 0,
-        gwpByLob: {},
-      },
-    );
-  });
-
-  /**
    * Number of currently selected policies.
    * WHY COMPUTED: Components bind to this directly rather than reading
    * selectedPolicyIds().length — avoids array creation on every binding evaluation.
@@ -301,9 +176,6 @@ export class PolicyStore {
 
   /** True when at least one policy is selected. Drives bulk-action button states. */
   readonly hasSelection = computed(() => this._selectedPolicyIds().length > 0);
-
-  /** Total number of policies in the filtered set. Drives the paginator total. */
-  readonly totalPolicies = computed(() => this.filteredPolicies().length);
 
   // ---------------------------------------------------------------------------
   // Constructor — logging effect
@@ -326,35 +198,45 @@ export class PolicyStore {
   // ---------------------------------------------------------------------------
 
   /**
-   * Loads policies from the API using the current filters and sort state.
+   * Loads the current page of policies AND the filtered summary from the API.
+   *
+   * WHY forkJoin (one combined load): The page list and the KPI summary are
+   * driven by the same filter criteria and should update together. forkJoin
+   * issues both requests in parallel and emits once both complete, so the table
+   * and the summary cards never display data from different filter states.
    *
    * Side effects:
-   * - Sets `_loading` to true before the request, false after.
-   * - Writes the API response into `_policies` on success.
+   * - Sets `_loading` true before, false after.
+   * - Writes the page into `_policies`, the count into `_total`, and the
+   *   aggregates into `_summary` on success.
    * - Writes a human-readable error message into `_error` on failure.
    * - Resets the selection on each successful load (stale IDs after a reload
    *   could cause silent no-ops in bulk operations).
-   * - Resets pagination to page 0 on each new load (filter change triggered
-   *   a reload → user must be on the first page to see relevant results).
    */
   loadPolicies(): void {
     this._loading.set(true);
     this._error.set(null);
 
-    // WHY takeUntilDestroyed: Prevents memory leaks if the service or its
-    // consumers are destroyed while an API call is in-flight. DestroyRef is
-    // injected in the constructor and passed here to associate the subscription
-    // lifetime with the store instance rather than the calling component.
-    this.api
-      .getAll(this._filters(), this._sort())
+    const filters = this._filters();
+
+    // WHY takeUntilDestroyed: Prevents memory leaks if the store or its
+    // consumers are destroyed while a request is in-flight.
+    forkJoin({
+      page: this.api.getAll(filters, this._sort(), this._pagination()),
+      summary: this.api.getSummary(filters),
+    })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (policies) => {
-          this._policies.set(policies);
+        next: ({ page, summary }) => {
+          this._policies.set(page.data);
+          this._total.set(page.total);
+          this._summary.set(summary);
           this._selectedPolicyIds.set([]);
           this._lastFailedFlagIds.set([]);
           this._loading.set(false);
-          this.logger.info(`PolicyStore: loaded ${policies.length} policies`);
+          this.logger.info(
+            `PolicyStore: loaded page of ${page.data.length} / ${page.total} policies`,
+          );
         },
         error: (err: HttpErrorResponse | NormalisedHttpError | Error | unknown) => {
           this._loading.set(false);
@@ -379,6 +261,7 @@ export class PolicyStore {
    */
   updateFilters(patch: Partial<PolicyFilter>): void {
     this._filters.update((current) => ({ ...current, ...patch }));
+    this.resetToFirstPage();
     this._selectedPolicyIds.set([]);
     this.loadPolicies();
   }
@@ -386,25 +269,48 @@ export class PolicyStore {
   /**
    * Clears all active filters and reloads.
    *
-   * Side effect: resets selection and triggers a reload.
+   * Side effect: resets selection, returns to page 0, and triggers a reload.
    */
   clearFilters(): void {
     this._filters.set({});
+    this.resetToFirstPage();
     this._selectedPolicyIds.set([]);
     this.loadPolicies();
   }
 
   /**
-   * Updates the active sort state and triggers a data reload.
+   * Updates the active sort state and triggers a server-side re-sort + reload.
    *
-   * WHY RELOAD ON SORT: Sort is applied server-side via _sort/_order params.
-   * Client-side sort on the full 250-record set is possible but server-side
-   * sort ensures results are consistent with a future switch to true pagination.
+   * WHY RESET TO PAGE 0: A new sort order makes the current page index
+   * meaningless — the user should see the top of the newly ordered results.
    *
    * @param sort - The new sort state.
    */
   updateSort(sort: PolicySort): void {
     this._sort.set(sort);
+    this.resetToFirstPage();
+    this.loadPolicies();
+  }
+
+  /**
+   * Updates pagination (page navigation or page-size change) and reloads.
+   *
+   * WHY PERSIST pageSize: The user's preferred page size should survive a
+   * refresh. Page index is intentionally NOT persisted — every session starts
+   * at page 0 since the underlying data may have changed.
+   *
+   * @param pageIndex - Zero-based page index from MatPaginator.
+   * @param pageSize  - Records per page from MatPaginator.
+   */
+  setPage(pageIndex: number, pageSize: number): void {
+    const current = this._pagination();
+    if (current.pageIndex === pageIndex && current.pageSize === pageSize) {
+      return; // No change — avoid a redundant request.
+    }
+    if (pageSize !== current.pageSize) {
+      this.storage.set<number>(PAGE_SIZE_STORAGE_KEY, pageSize);
+    }
+    this._pagination.set({ pageIndex, pageSize });
     this.loadPolicies();
   }
 
@@ -578,6 +484,9 @@ export class PolicyStore {
           this._policies.update((current) =>
             current.map((p) => (p.id === updated.id ? updated : p)),
           );
+          // A renewal changes the policy's status, which shifts the KPI counts.
+          // Refresh the server-computed summary so the cards stay accurate.
+          this.refreshSummary();
           this.logger.info(`PolicyStore: renewed policy ${id}`);
         },
         error: (err: unknown) => {
@@ -593,6 +502,40 @@ export class PolicyStore {
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
+
+  /**
+   * Resolves the initial page size from persisted user preference, validating
+   * it against the allowed options and falling back to the default.
+   *
+   * WHY VALIDATE: A stale or tampered localStorage value (e.g. a removed page
+   * size) must not produce a paginator option that doesn't exist.
+   */
+  private resolveInitialPageSize(): number {
+    const saved = this.storage.get<number>(PAGE_SIZE_STORAGE_KEY);
+    return saved && PAGE_SIZE_OPTIONS.includes(saved) ? saved : DEFAULT_PAGE_SIZE;
+  }
+
+  /** Resets pagination to the first page, preserving the current page size. */
+  private resetToFirstPage(): void {
+    this._pagination.update((p) => ({ ...p, pageIndex: 0 }));
+  }
+
+  /**
+   * Re-fetches ONLY the summary aggregates for the current filters.
+   *
+   * Used after a single-policy mutation (e.g. renew) that changes a KPI metric
+   * but does not warrant reloading the whole page list.
+   */
+  private refreshSummary(): void {
+    this.api
+      .getSummary(this._filters())
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (summary) => this._summary.set(summary),
+        error: (err: unknown) =>
+          this.logger.error('PolicyStore.refreshSummary() failed', err),
+      });
+  }
 
   /**
    * Extracts a human-readable error message from any thrown error type.
