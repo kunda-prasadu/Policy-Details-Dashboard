@@ -367,7 +367,13 @@ export class PolicyStore {
   updateFilters(patch: Partial<PolicyFilter>): void {
     this._filters.update((current) => ({ ...current, ...patch }));
     this._selectedPolicyIds.set([]);
-    this.loadPolicies();
+    // WHY THIS APPROACH: All 250 policies are already loaded in _policies.
+    // The filteredPolicies computed re-evaluates synchronously on the next signal
+    // read whenever _filters changes — no API reload is needed for filter-only
+    // changes. Calling loadPolicies() here would cause a visible loading-skeleton
+    // flash on every keystroke in the search box and unnecessary API round-trips.
+    // Sort changes still trigger loadPolicies() in updateSort() because json-server
+    // applies sort server-side.
   }
 
   /**
@@ -378,7 +384,9 @@ export class PolicyStore {
   clearFilters(): void {
     this._filters.set({});
     this._selectedPolicyIds.set([]);
-    this.loadPolicies();
+    // WHY NO loadPolicies(): same reasoning as updateFilters() — the full set
+    // is already in memory; clearing filters just removes the predicate so
+    // filteredPolicies returns all _policies entries immediately.
   }
 
   /**
